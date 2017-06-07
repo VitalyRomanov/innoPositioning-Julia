@@ -1,8 +1,21 @@
 module ClientDataProc
   using PyPlot
   using LocTrack
+  using DataFrames
 
-  export ip_to_labels!,filter_rssi_values!,change_rssi_scale!,remove_milliseconds,get_rssi_records
+  export ip_to_labels!,filter_rssi_values!,change_rssi_scale!,remove_milliseconds,get_rssi_records,time_to_ms,filter_and_process
+
+  function filter_and_process(input_file,id)
+    client = DataFrames.readtable(input_file)
+    client = ip_to_labels!(client)
+    client = filter_rssi_values!(client,[0,1])
+    client = change_rssi_scale!(client)
+    client = remove_milliseconds(client)
+    client[:,5] = deepcopy(client[:,4])
+    client = ClientDataProc.time_to_ms(client)
+    writetable("/Users/LTV/Documents/rssi_data/client_data/client_$(id).csv",client)
+  end
+
 
   function get_rssi_records(client_data,number_of_records = -1)
     data_size = size(client_data,1)
@@ -18,10 +31,12 @@ module ClientDataProc
       rssi_client_data[data_size-i+1] = RssiRecord(Float64(client_data[i,2]),client_data[i,3],client_data[i,4]/1000.)
     end
 
+    timestamps = Array(client_data[:,5])
+
     if number_of_records == -1
-      return rssi_client_data
+      return rssi_client_data,timestamps
     else
-      return rssi_client_data[1:number_of_records]
+      return rssi_client_data[1:number_of_records],timestamps[1:number_of_records]
     end
 
   end

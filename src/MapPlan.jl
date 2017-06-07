@@ -1,6 +1,6 @@
 module MapPlan
   using MapPrimitives
-  using PyPlot
+  using Plots
   export read_data,walls,bbox,AP,wall_ind,plot_walls,downsample_maps
 
   # function nearby_walls(AP::Point)
@@ -41,10 +41,34 @@ module MapPlan
     return new_map
   end
 
-  function plot_walls(walls)
+  function plot_walls_2d(walls,x_max,y_max)
+    gr()
+    town_plan = plot([0,0],[0,0],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
     for wall in walls
-      plot([wall.points[1].val[1],wall.points[4].val[1]],[wall.points[1].val[2],wall.points[4].val[2]],"k")
+      plot!(wall[:,1],wall[:,2],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
     end
+    return town_plan
+  end
+
+  function plot_walls(walls,x_max,y_max)
+    gr()
+    town_plan = plot([0,0],[0,0],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
+    for wall in walls
+      plot!([wall.points[1].val[1],wall.points[4].val[1]],[wall.points[1].val[2],wall.points[4].val[2]],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
+    end
+    return town_plan
+  end
+
+  function read_data_2d(data_file)
+    walls = []
+    input = open(data_file)
+    for (line_ind,line) in enumerate(eachline(input))
+      strvec = split(line[1:end-2]," ")
+      v = map(x->parse(Float64,x),strvec)
+      wall = reshape(v[:],2,Int(length(v)/2))'
+      push!(walls,wall)
+    end
+    return walls
   end
 
 
