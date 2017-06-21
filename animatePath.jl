@@ -25,24 +25,29 @@ for (fileind,file) in enumerate(readdir(data_folder))
   ep = user_dump["estimatedpath"]
   signal_records = user_dump["signalrecords"]
   timestamps = user_dump["timestamps"]
+  timestamps = flipdim(timestamps,1)
+
+  # bucket_times
 
   nn = 0.
   cw = 0.
 
   gr()
 
-  anim = @animate for i=2:length(timestamps)
+  # anim = @animate for i=2:length(timestamps)
+  for i=2:length(timestamps)
     MapPlan.plot_walls_2d(walls,x_max,y_max)
     plot!([ep[i-1,1],ep[i,1]],[ep[i-1,2],ep[i,2]],linecolor = :blue,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
     plot!([ep[i,1]],[ep[i,2]],markershape=:circle,markercolor=:red,xlims=(0,x_max),ylims=(0,y_max),annotations=(x_max-420,20,text("$(timestamps[i])",:left,:red,16,"Courier Bold")),grid=false,legend=false,axis=false)
-
-    nn = i/length(timestamps)*100
-    if nn-cw>1.
-      print("\r$(i/length(timestamps)*100)           ")
-      cw = nn
-    end
+    println("Saving $(i)")
+    Plots.savefig("$(current_path)/res/frames/$(i).png")
+    # nn = i/length(timestamps)*100
+    # if nn-cw>1.
+    #   print("\r$(i/length(timestamps)*100)           ")
+    #   cw = nn
+    # end
   end
-  gif(anim, "$(data_folder)/$(file[1:end-4]).gif", fps = 30)
+  # gif(anim, "$(data_folder)/$(file[1:end-4]).gif", fps = 30)
 end
 
 

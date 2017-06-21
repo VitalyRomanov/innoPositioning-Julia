@@ -5,9 +5,9 @@
 # optimize math
 # in order to make everything parallel I need to transfer data to all the workers
 
-
+current_path = pwd()
+push!(LOAD_PATH, "$(current_path)/src")
 # push!(LOAD_PATH, "/Users/LTV/Dropbox/mapGen/fast_vis_matr")
-push!(LOAD_PATH, "/home/vromanov/Dropbox/mapGen/fast_vis_matr")
 
 using MapPrimitives
 using ImageTree
@@ -21,26 +21,33 @@ using PyPlot
 
 
 
-function calculate_signal_strength_matrix(image_tree,wall_index,x_max,y_max)
+function calculate_signal_strength_matrix(image_tree,wall_index,x_max,y_max,AP_ind)
   print("Calculating signal strength matrix\n")
   # signal_strength_matrix = ones(Float64,x_max,y_max)*-1000
-  ss = SharedArray(Float64,x_max,y_max)
+  ss = ones(Float64,x_max,y_max)*-900
+  # paths = Array(Array{Float64},x_max,y_max)
 
   pathloss_distance_threshold = 100.
 
+  path_dump = open("$(current_path)/res/coverage/path_dump_$(AP_ind).txt","w")
+
   for x in collect(1:x_max)
     # tic()
-    @parallel for y in collect(1:y_max)
+    for y in collect(1:y_max)
       if norm([x,y,1]-image_tree[1].location.val) < pathloss_distance_threshold
         # signal_strength_matrix[x,y] =  MapBuilder.calculate_signal_strength(MapPrimitives.Point([x,y,1.0]),image_tree,wall_index)
-        ss[x,y] =  MapBuilder.calculate_signal_strength(MapPrimitives.Point([x,y,1.0]),image_tree,wall_index)
+        ss[x,y],pp =  MapBuilder.calculate_signal_strength(MapPrimitives.Point([x,y,1.0]),image_tree,wall_index)
+        if length(pp)>0
+          write(path_dump,"$(x) $(y) $(pp)\n")
+        end
       end
     end
     # toc()
     print("\r$(image_tree[1].location.val[1:2]) $(x)/$(x_max)                    ")
   end
+  close(path_dump)
   print("\n")
-  return signal_strength_matrix
+  return ss
 end
 
 # AP = MapPrimitives.Point([599.344866581,466.28583739,3.0])
@@ -62,13 +69,13 @@ APs = [MapPrimitives.Point([200.99503661, 394.493304064,3.0]),
 
 ssms = []
 
-walls,bbox = MapPlan.read_data("walls.txt")
+walls,bbox = MapPlan.read_data("$(current_path)/res/coverage/walls.txt")
 x_max = Int64(round(bbox[2].points[3].val[1]))
 y_max = Int64(round(bbox[2].points[3].val[2]))
 wall_index = MapPrimitives.create_wall_index(walls,x_max,y_max)
 # visibility_matrix = MapBuilder.create_wall_visibility_matrix(wall_index)
 # save("vis_ind.jld", "visibility_matrix", visibility_matrix)
-visibility_matrixx = load("vis_ind.jld")
+visibility_matrixx = load("$(current_path)/res/coverage/vis_ind.jld")
 visibility_matrix = visibility_matrixx["visibility_matrix"]
 
 for i in 1:size(visibility_matrix,1)
@@ -84,12 +91,12 @@ for (AP_ind,AP) in enumerate(APs)
 
   wall_index = MapPrimitives.create_wall_index(walls,x_max,y_max)
   image_tree = MapBuilder.build_image_tree(AP,wall_index,visibility_matrix,pathloss_distance_threshold = 150)
-  signal_strength_matrix = calculate_signal_strength_matrix(image_tree,wall_index,x_max,y_max)
+  signal_strength_matrix = calculate_signal_strength_matrix(image_tree,wall_index,x_max,y_max,AP_ind)
   pcolormesh(signal_strength_matrix)
   clim(-120,-30)
   # colorbar()
   savefig("$(AP_ind).png")
-  save("data_$(AP_ind).jld", "data", signal_strength_matrix)
+  save("$(current_path)/res/coverage/data_$(AP_ind).jld", "data", signal_strength_matrix)
 
   push!(ssms,signal_strength_matrix)
 end
@@ -105,5 +112,5 @@ end
 pcolormesh(signal_strength_matrix)
 clim(-120,-30)
 # colorbar()
-savefig("full.png")
-save("full.jld", "data", signal_strength_matrix)
+savefig("$(current_path)/res/coverage/full.png")
+save("$(current_path)/res/coverage/full.jld", "data", signal_strength_matrix)

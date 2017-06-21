@@ -40,7 +40,7 @@ module MapBuilder
   end
 
 
-  function calculate_offsprings(image::treeNode,image_id::Int,tree_size::Int,wall_index::WallIndex,AP::Point,visibility_matrix;max_levels = 2, distance_threshold = 150)
+  function calculate_offsprings(image::treeNode,image_id::Int,tree_size::Int,wall_index::WallIndex,AP::Point,visibility_matrix;max_levels = 3, distance_threshold = 150)
     offsprings = Array(treeNode,length(wall_index.walls))
     children = Array(Int,length(wall_index.walls))
     real_offsprings = 0
@@ -124,7 +124,9 @@ module MapBuilder
         return [],[],[]
       end
 
-      if !no_walls_on_path(Line(vertices[end][1:2],reflection_point[1:2]),wall_index)
+      eps = vertices[end][1:2]-reflection_point[1:2]
+      eps = 0.01*eps/norm(eps)
+      if !no_walls_on_path(Line(vertices[end][1:2]-eps,reflection_point[1:2]+eps),wall_index)
         return [],[],[]
       end
 
@@ -132,7 +134,9 @@ module MapBuilder
       push!(associated_walls,current_wall)
       image = image_tree[image.parent]
     end
-    if !no_walls_on_path(Line(vertices[end][1:2],image.location.val[1:2]),wall_index)
+    eps = vertices[end][1:2]-image.location.val[1:2]
+    eps = 0.01*eps/norm(eps)
+    if !no_walls_on_path(Line(vertices[end][1:2]-eps,image.location.val[1:2]+eps),wall_index)
       return [],[],[]
     end
     push!(vertices,image.location.val)
@@ -252,11 +256,13 @@ module MapBuilder
   function calculate_signal_strength(Rx::Point,image_tree::Array{treeNode},wall_index::WallIndex; attenuation_exponent = 2.2,reflection_coef = 12.53,transmission_coef = 100., P0 = -30.)
     distance = Array(Float64,0)
     path_loss = Array(Float64,0)
+    all_paths = Array(Float64,0)
     for (node_ind,image) in enumerate(image_tree)
       path_vertices,associated_walls = get_path_vertices(image_tree,node_ind,Rx,wall_index)
 
       if length(path_vertices)>0
         dist_sum = get_path_distance(path_vertices)
+        append!(all_paths,[dist_sum;length(path_vertices)])
 
         pl = 10^((P0-10*attenuation_exponent*log10(dist_sum)-reflection_coef*(length(associated_walls)-2))/10)
 
@@ -266,10 +272,12 @@ module MapBuilder
     end
 
     if sum(path_loss)==0
-      return -900
+      value = -900
     else
-      return Int(round(10*log10(sum(path_loss))))
+      value = Int(round(10*log10(sum(path_loss))))
     end
+
+    return value,all_paths
   end
 
   function get_path_distance(path)
