@@ -6,25 +6,36 @@ module MapBuilder
 
   export build_image_tree,calculate_signal_strength
 
+  function shrink_line(line::Line,absolute_shrinkage_value)
+    eps = line.v2-line.v1
+    if norm(eps)==0
+      return line
+    end
+    eps = absolute_shrinkage_value*eps/norm(eps)
+    line.v2 -= eps
+    line.v1 += eps
+    return line
+  end
+
   function create_wall_visibility_matrix(wall_ind::WallIndex)
-    visibility_matrix = Array(Bool,length(wall_ind.walls),length(wall_ind.walls))
-    tic()
+    visibility_matrix = Array(Bool,length(wall_ind.walls),length(wall_ind.walls))*false
     for (wall_index,wall) in enumerate(wall_ind.walls)
-      toc()
-      tic()
-      print("Inspecting wall ",wall_index,"...\n")
-      w1v1 = wall.points[1].val[1:2]
-      w1v2 = wall.points[4].val[1:2]
+      println("\rInspecting wall $(wall_index)...    ")
+      shrinked_wall1 = shrink_line(Line(wall.points[1].val[1:2],wall.points[4].val[1:2]),.3)
       for (couple_ind,couple_wall) in enumerate(wall_ind.walls[wall_index+1:end])
-        # print("\t checking friend ",couple_ind,"\n")
-        w2v1 = couple_wall.points[1].val[1:2]
-        w2v2 = couple_wall.points[4].val[1:2]
+
+        if norm(couple_wall.points[1].val[1:2]-wall.points[1].val[1:2])>200
+          continue
+        end
+
+
+        shrinked_wall2 = shrink_line(Line(couple_wall.points[1].val[1:2],couple_wall.points[4].val[1:2]),.3)
 
         paths = Array(Line,4)
-        paths[1] = Line(w1v1,w2v1)
-        paths[2] = Line(w1v1,w2v2)
-        paths[3] = Line(w1v2,w2v1)
-        paths[4] = Line(w1v2,w2v2)
+        paths[1] = Line(shrinked_wall1.v1,shrinked_wall2.v1)
+        paths[2] = Line(shrinked_wall1.v1,shrinked_wall2.v2)
+        paths[3] = Line(shrinked_wall1.v2,shrinked_wall2.v1)
+        paths[4] = Line(shrinked_wall1.v2,shrinked_wall2.v2)
 
         result = false
         for path in paths
@@ -33,53 +44,90 @@ module MapBuilder
             break
           end
         end
-        visibility_matrix[wall_index,wall_index-1+couple_ind] = result
+        visibility_matrix[wall_index,wall_index+couple_ind] = result
       end
     end
+
+    for i in 1:size(visibility_matrix,1)
+      for j in i+1:size(visibility_matrix,1)
+        visibility_matrix[j,i] = visibility_matrix[i,j]
+      end
+      visibility_matrix[i,i] = false
+    end
+
     return visibility_matrix
   end
 
 
-  function calculate_offsprings(image::treeNode,image_id::Int,tree_size::Int,wall_index::WallIndex,AP::Point,visibility_matrix;max_levels = 3, distance_threshold = 150)
+  function wall_position_2D(test_pos::Point,reference_wall::Wall)
+    slope = (reference_wall.points[4].val[2]-reference_wall.points[1].val[2])/(reference_wall.points[4].val[1]-reference_wall.points[1].val[1])
+    bias = reference_wall.points[4].val[2] - slope * reference_wall.points[4].val[1]
+    return test_pos.val[2] > slope * test_pos.val[2] + bias
+  end
+
+
+  function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,tree_size::Int,wall_index::WallIndex,AP::Point,visibility_matrix;max_levels = 3, distance_threshold = 150)
+    # This function calculates the offsprings of a particular image in the image tree.
+    # It is crucial to reduce the number of irrelevant images as much a possible. For this reason several optimizations are done.
+    # 1. If the node is the root node, the walls are checked for being visible from the standpoint of the access point.
+    # 2. Otherwise visibility matrix is used to determine whether the wall is visible from the standpoint of reflection wall
+    # 3. The images should be built only for walls that are on the same side as the previous secondary source
     offsprings = Array(treeNode,length(wall_index.walls))
     children = Array(Int,length(wall_index.walls))
     real_offsprings = 0
     current_offset = 0
 
+    image = image_tree[image_id]
+
     if image.level < max_levels
+      # if the image is the root image no prior knowledge of wall visibility is available
       if image.assigned_wall == -1
         feasible_walls = wall_index.walls
       else
         feasible_walls = wall_index.walls[find(visibility_matrix[image.assigned_wall,:])]
-      end
-      for wall in feasible_walls
-        if norm(wall.points[1].val-AP.val)<distance_threshold
-          if wall.id != image.assigned_wall
-            paths = Array(Line,2)
-            paths[1] = Line(image.location.val[1:2],wall.points[1].val[1:2])
-            paths[2] = Line(image.location.val[1:2],wall.points[4].val[1:2])
 
-            wall_visible = false
-            for path in paths
-              if no_walls_on_path(path,wall_index)
-                wall_visible = true
-                break
-              end
-            end
-            if wall_visible
-              position = reflection_from_plane(image.location.val,wall.plane_equation)
-              new_image = MapPrimitives.Point(position)
-              new_node = ImageTree.treeNode(new_image,image.level+1,image_id,Array(Int,0),wall.id)
-              real_offsprings += 1
-              current_offset+=1
-              offsprings[real_offsprings] = new_node
-              children[real_offsprings] = tree_size+current_offset
-            end
+        parent_wall = image_tree[image.parent].assigned_wall
+        if parent_wall == -1
+          parent_reference = AP
+        else
+          parent_reference = wall_index.walls[parent_wall].points[1]
+        end
+        current_wall = wall_index.walls[image.assigned_wall]
+        parent_position = wall_position_2D(parent_reference,current_wall)
+      end
+
+      # we are going to reduce the number of feasible walls
+      temp_feasible_walls = Array(Wall,length(feasible_walls))
+      temp_position = 1
+
+      for wall in feasible_walls
+        if norm(wall.points[1].val-AP.val)<50.#distance_threshold
+          if image.assigned_wall == -1
+            truly_feasible =  no_walls_on_path(Line(image.location.val[1:2],(wall.points[1].val[1:2]+wall.points[4].val[1:2])/2),wall_index)
+          else
+            truly_feasible = (parent_position==wall_position_2D(wall.points[1],current_wall))
+          end
+
+          if truly_feasible
+            temp_feasible_walls[temp_position] = wall
+            temp_position += 1
           end
         end
       end
+
+      feasible_walls = temp_feasible_walls[1:temp_position-1]
+
+      for wall in feasible_walls
+        position = reflection_from_plane(image.location.val,wall.plane_equation)
+        new_image = MapPrimitives.Point(position)
+        new_node = ImageTree.treeNode(new_image,image.level+1,image_id,Array(Int,0),wall.id)
+        real_offsprings += 1
+        current_offset += 1
+        offsprings[real_offsprings] = new_node
+        children[real_offsprings] = tree_size+current_offset
+      end
     end
-    # potentially there can be a problem of not all valuable nodes included in the tree
+
     image.children = children[1:real_offsprings]
     return offsprings[1:real_offsprings]
   end
@@ -94,7 +142,7 @@ module MapBuilder
     tree_position = 1
     iteration_steps = length(image_tree)
     while tree_position <= iteration_steps
-      offsprings = calculate_offsprings(image_tree[tree_position],tree_position,length(image_tree),wall_index,AP,visibility_matrix, distance_threshold = pathloss_distance_threshold)
+      offsprings = calculate_offsprings(image_tree,tree_position,length(image_tree),wall_index,AP,visibility_matrix, distance_threshold = pathloss_distance_threshold)
       append!(image_tree,offsprings)
       tree_position += 1
       iteration_steps = length(image_tree)
@@ -124,9 +172,7 @@ module MapBuilder
         return [],[],[]
       end
 
-      eps = vertices[end][1:2]-reflection_point[1:2]
-      eps = 0.01*eps/norm(eps)
-      if !no_walls_on_path(Line(vertices[end][1:2]-eps,reflection_point[1:2]+eps),wall_index)
+      if !no_walls_on_path(Line(vertices[end][1:2],reflection_point[1:2]),wall_index)
         return [],[],[]
       end
 
@@ -134,9 +180,8 @@ module MapBuilder
       push!(associated_walls,current_wall)
       image = image_tree[image.parent]
     end
-    eps = vertices[end][1:2]-image.location.val[1:2]
-    eps = 0.01*eps/norm(eps)
-    if !no_walls_on_path(Line(vertices[end][1:2]-eps,image.location.val[1:2]+eps),wall_index)
+
+    if !no_walls_on_path(Line(vertices[end][1:2],image.location.val[1:2]),wall_index)
       return [],[],[]
     end
     push!(vertices,image.location.val)
@@ -165,11 +210,7 @@ module MapBuilder
 
     ip = [x,y]
 
-    if dot(line1.v1-ip,line1.v2-ip)<=0 && dot(line2.v1-ip,line2.v2-ip)<=0
-      return true
-    else
-      return false
-    end
+    return dot(line1.v1-ip,line1.v2-ip)<=0 && dot(line2.v1-ip,line2.v2-ip)<=0
   end
 
   function sector_crossed(ray::Line,sector::Sector)
@@ -228,6 +269,7 @@ module MapBuilder
 
 
   function no_walls_on_path(path::Line,wall_index::WallIndex)
+    path = shrink_line(path,0.013)
     filtered_walls = wall_index.walls[query_walls(path.v1,path.v2,wall_index)]
     for wall in filtered_walls
       if lines_crossed(path,Line(wall.points[1].val[1:2],wall.points[4].val[1:2]))
