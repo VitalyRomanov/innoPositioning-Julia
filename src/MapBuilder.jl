@@ -66,7 +66,7 @@ module MapBuilder
   end
 
 
-  function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,tree_size::Int,wall_index::WallIndex,AP::Point,visibility_matrix;max_levels = 3, distance_threshold = 150)
+  function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,tree_size::Int,wall_index::WallIndex,AP::Point,visibility_matrix;max_levels = 2, distance_threshold = 150)
     # This function calculates the offsprings of a particular image in the image tree.
     # It is crucial to reduce the number of irrelevant images as much a possible. For this reason several optimizations are done.
     # 1. If the node is the root node, the walls are checked for being visible from the standpoint of the access point.
@@ -101,7 +101,7 @@ module MapBuilder
       temp_position = 1
 
       for wall in feasible_walls
-        if norm(wall.points[1].val-AP.val)<50.#distance_threshold
+        if norm(wall.points[1].val-AP.val)<distance_threshold
           if image.assigned_wall == -1
             truly_feasible =  no_walls_on_path(Line(image.location.val[1:2],(wall.points[1].val[1:2]+wall.points[4].val[1:2])/2),wall_index)
           else

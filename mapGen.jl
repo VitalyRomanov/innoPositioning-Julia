@@ -27,7 +27,7 @@ function calculate_signal_strength_matrix(image_tree,wall_index,x_max,y_max,AP_i
   ss = ones(Float64,x_max,y_max)*-900
   # paths = Array(Array{Float64},x_max,y_max)
 
-  pathloss_distance_threshold = 100.
+  pathloss_distance_threshold = 150.
 
   path_dump = open("$(current_path)/res/coverage/path_dump_$(AP_ind).txt","w")
 
