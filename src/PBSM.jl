@@ -1,4 +1,4 @@
- module PBSM
+module PBSM
 
 using Geometry
 
@@ -49,15 +49,17 @@ function get_2d_sector_ind(coord,sector_size,sectors)
   return loc
 end
 
-sector_index =
+function grid_to_index(grid_coord::Array{Int},grid_size::Array{Int})
+  return (grid_coord)'*[grid_size[2]*grid_size[1],grid_size[1],1]+1
+end
 
 function prepare_sectors!(index::Pbsm)
 
   sector_count = 1
 
-  for z_grid = 1:grid_size[3]
-    for y_grid = 1:grid_size[2]
-      for x_grid = 1:grid_size[1]
+  for z_grid = 1:index.grid_size[3]
+    for y_grid = 1:index.grid_size[2]
+      for x_grid = 1:index.grid_size[1]
         geometry = Array(Array{Float64},4)
         v1 = [x_grid-1,y_grid-1,z_grid-1]*index.grid_scale+index.lims[:,1]
         v2 = [x_grid,y_grid,z_grid]*index.grid_scale+index.lims[:,1]
@@ -68,6 +70,7 @@ function prepare_sectors!(index::Pbsm)
         #   element = loc[:,ind]*index.grid_scale
         # end
         # index.sectors[sector_count] = Sector(Sector,Array(Wall,0),geometry)
+        println(sector_count," ",grid_to_index(v1,index.grid_size))
         sector_count+=1
       end
     end
@@ -156,7 +159,7 @@ function create_index(objects,lims)
 end
 
 
-function obj_sec_coverage(index::Pbsm,obj::MBR)
+# function obj_sec_coverage(index::Pbsm,obj::MBR)
 
 
 
