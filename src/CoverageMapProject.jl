@@ -18,9 +18,14 @@ type CMProject
   AP_visibilities::Array{Array{Bool}}
   plan::mapPlan
   image_trees::Array{Array{treeNode}}
+  ssms::Array{Array{Float64}}
 
   # Flags
   image_trees_ready::Bool
+  coverage_maps_ready::Bool
+
+  # Counters
+  ssms_ready_count::Int
 
 end
 
@@ -29,7 +34,15 @@ function create_project(init_path,save_path,name)
   map_plan = create_map_plan(init_path,aps)
   image_trees = Array(Array{treeNode},0)
   AP_visibilities = Array(Array{Bool},0)
+  ssms = Array(Array{Float64},0)
   image_trees_ready = false
+  coverage_maps_ready = false
+  ssms_ready_count = 0
+
+  for i=1:length(aps)
+    push!(ssms,zeros(Float64,map_plan.limits[1,2]-map_plan.limits[1,1],map_plan.limits[2,2]-map_plan.limits[2,1]))
+  end
+
   project = CMProject(init_path,
                       save_path,
                       name,
@@ -37,7 +50,10 @@ function create_project(init_path,save_path,name)
                       AP_visibilities,
                       map_plan,
                       image_trees,
-                      image_trees_ready)
+                      ssms,
+                      image_trees_ready,
+                      coverage_maps_ready,
+                      ssms_ready_count)
 
   save_proj(project)
 
@@ -71,13 +87,16 @@ function save_proj(project::CMProject)
                   "ap_visibilities",project.AP_visibilities,
                   "mapplan",project.plan,
                   "image_trees",project.image_trees,
-                  "image_trees_ready",project.image_trees_ready)
+                  "ssms",project.ssms,
+                  "image_trees_ready",project.image_trees_ready,
+                  "coverage_maps_ready",project.coverage_maps_ready,
+                  "ssms_ready_count",project.ssms_ready_count)
   # save("$(project.path_save_data)/$(project.project_name).jld","CMProject",project)
 end
 
 function load_project(path)
-  path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,image_trees_ready = JLD.load("$(path)","init_path","save_path","proj_name","aps","ap_visibilities","mapplan","image_trees","image_trees_ready")
-  return CMProject(path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,image_trees_ready)
+  path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,ssms_ready_count = JLD.load("$(path)","init_path","save_path","proj_name","aps","ap_visibilities","mapplan","image_trees","ssms","image_trees_ready","coverage_maps_ready","ssms_ready_count")
+  return CMProject(path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,ssms_ready_count)
 end
 
 function create_map_plan(init_path,aps)
@@ -151,6 +170,30 @@ function calculate_image_trees(project::CMProject)
   end
 end
 
+
+function calculate_coverage_map(project::CMProject)
+  if project.coverage_maps_ready
+    println("Coverage maps are calculated")
+    return
+  end
+
+  for ap_ind = project.ssms_ready_count+1:length(project.APs)
+    project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind], project.image_trees[ap_ind],project.plan)
+
+
+    # push!(project.ssms,ssm)
+    project.ssms_ready_count += 1
+    save_proj(project)
+  end
+
+  project.coverage_maps_ready = true
+end
+
+function recalculate_coverage_map(project::CMProject,ap_ind)
+  project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind], project.image_trees[ap_ind],project.plan)
+
+  save_proj(project)
+end
 
 
 

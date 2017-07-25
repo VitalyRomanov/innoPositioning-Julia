@@ -4,7 +4,7 @@ module MapPlan
   using RadixTree
 
   export mapPlan
-  export read_data,plot_walls,downsample_maps,no_walls_on_path
+  export read_data,plot_walls,downsample_maps,no_walls_on_path,walls_on_path
 
   type mapPlan
     walls::Array{Wall3D}
@@ -12,6 +12,10 @@ module MapPlan
     limits::Array{Int}
     index::RadixTree.radixTree
     vis_matr::Array{Bool}
+  end
+
+  function query_walls(path::Line,wall_index::RadixTree.radixTree)
+    return RadixTree.probe(wall_index,line2mbr(path))
   end
 
 
@@ -206,13 +210,27 @@ module MapPlan
 
   function no_walls_on_path(path::Line,plan::mapPlan)
     path = shrink_line(path,float_err_marg)
-    filtered_walls = plan.walls[RadixTree.probe(plan.index,line2mbr(path))]
+    filtered_walls = plan.walls[query_walls(path,plan.index)]
+    # filtered_walls = plan.walls[RadixTree.probe(plan.index,line2mbr(path))]
     for wall in filtered_walls
       if MapPrimitives.get_intersection_point(path,wall)!=-1
         return false
       end
     end
     return true
+  end
+
+  function walls_on_path(path::Line,plan::mapPlan)
+    path = shrink_line(path,float_err_marg)
+    # filtered_walls = plan.walls[RadixTree.probe(plan.index,line2mbr(path))]
+    filtered_walls = plan.walls[query_walls(path,plan.index)]
+    wop = 0
+    for wall in filtered_walls
+      if MapPrimitives.get_intersection_point(path,wall)!=-1
+        wop += 1
+      end
+    end
+    return wop
   end
 
 end

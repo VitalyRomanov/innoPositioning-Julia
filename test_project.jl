@@ -4,6 +4,7 @@ push!(LOAD_PATH, "$(current_path)/src")
 
 using CoverageMapProject
 
+
 last_session_available = false
 options = 2
 if isfile("last_session.jld")
@@ -21,8 +22,8 @@ while !(resp in 1:options)
     print("\t3 - load last project\n")
   end
   print("Enter option: ")
-  resp = 3
-  # resp = parse(Int,readline())
+  # resp = 3
+  resp = parse(Int,readline())
 end
 
 
@@ -48,5 +49,11 @@ else
   println("Unknown choice")
 end
 
-proj.image_trees_ready = false
-CoverageMapProject.calculate_image_trees(proj)
+# proj.image_trees_ready = false
+# CoverageMapProject.calculate_image_trees(proj)
+
+# @time CoverageMapProject.calculate_coverage_map(proj)
+@time CoverageMapProject.recalculate_coverage_map(proj,1)
+# ProfileView.view()
+using Plots
+plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)

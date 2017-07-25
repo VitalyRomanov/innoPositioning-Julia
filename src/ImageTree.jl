@@ -115,7 +115,7 @@ module ImageTree
 
       for wall in feasible_walls
         position = reflection_from_plane(image.location,wall.plane_eq)
-        new_node = ImageTree.treeNode(position,image.level+1,image_id,Array(Int,0),wall.id,image.lb_dist+norm(position-image.location)/2)
+        new_node = ImageTree.treeNode(position,image.level+1,image_id,Array(Int,0),wall.id,norm(position-image.location)/2)
         real_offsprings += 1
         current_offset += 1
         offsprings[real_offsprings] = new_node

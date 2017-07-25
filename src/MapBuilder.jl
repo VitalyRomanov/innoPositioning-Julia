@@ -127,30 +127,76 @@ module MapBuilder
   #   return image_tree
   # end
 
-
-
-  function get_path_vertices(image_tree,node_ind,Rx::Point,plan::mapPlan)
-    vertices = Array(Array{Float64},0)
-    associated_walls = Array(Int,0)
+  function get_path_info(image_tree::Array{treeNode},node_ind::Int,Rx::Array{Float64},plan::mapPlan)
 
     image = image_tree[node_ind]
 
-    push!(vertices,Rx.val)
-    push!(associated_walls,0)
+    last_vertex = Rx
+    wop = 0::Int
+    nrw = image.level
+    dist = 0.::Float64
 
     while image.parent!=-1
-      current_image_loc = image.location.val
+      current_image_loc = image.location
       current_wall = image.assigned_wall
 
-      reflection_point = get_intersection_point(vertices[end],current_image_loc,plan.walls[current_wall])
+      susp_path = Line(last_vertex,current_image_loc)
 
-      if reflection_point == -1
+      reflection_point = get_intersection_point(susp_path,plan.walls[current_wall])
+
+      if reflection_point != -1
+        susp_path = Line(last_vertex,reflection_point)
+        wop += walls_on_path(susp_path,plan)
+        dist += norm(last_vertex - reflection_point)
+      else
+        return -1.,nrw,wop
+      end
+
+      last_vertex = reflection_point
+      image = image_tree[image.parent]
+    end
+
+    susp_path = Line(last_vertex,image.location)
+    wop += walls_on_path(susp_path,plan)
+    dist += norm(last_vertex - image.location)
+
+    return dist,nrw,wop
+  end
+
+
+
+  function get_path_vertices(image_tree,node_ind,Rx::Array{Float64},plan::mapPlan)
+
+    image = image_tree[node_ind]
+
+    vertices = Array(Array{Float64},image.level+2)
+    associated_walls = Array(Int,image.level)
+    # vertices = Array(Array{Float64},0)
+    # associated_walls = Array(Int,0)
+
+    vertices[end] = Rx
+    # push!(vertices,Rx.val)
+    # push!(associated_walls,0)
+    vert_pos = length(vertices)-1
+    assw_pos = length(associated_walls)
+
+    while image.parent!=-1
+      current_image_loc = image.location
+      current_wall = image.assigned_wall
+
+      susp_path = Line(vertices[vert_pos+1],current_image_loc)
+
+      reflection_point = get_intersection_point(susp_path,plan.walls[current_wall])
+
+      if reflection_point != -1
+        susp_path = Line(vertices[vert_pos+1],reflection_point,plan)
+        wop = walls_on_path(susp_path,plan)
         return [],[],[]
       end
 
-      if !no_walls_on_path(Line(vertices[end],reflection_point),plan)
-        return [],[],[]
-      end
+      # if !no_walls_on_path(Line(vertices[end],reflection_point),plan)
+      #   return [],[],[]
+      # end
 
       push!(vertices,reflection_point)
       push!(associated_walls,current_wall)
@@ -178,9 +224,9 @@ module MapBuilder
   # end
 
 
-  function query_walls(path::Line,wall_index::RadixTree.radixTree)
-    return RadixTree.probe(wall_index,line2mbr(path))
-  end
+  # function query_walls(path::Line,wall_index::RadixTree.radixTree)
+  #   return RadixTree.probe(wall_index,line2mbr(path))
+  # end
 
 
   # function query_walls(ray::Line,wall_index::WallIndex)
@@ -253,35 +299,74 @@ module MapBuilder
   # end
 
 
-  function calculate_signal_strength(Rx::Point,image_tree::Array{treeNode},plan::mapPlan; ae = 2,rc = 12.53,tc = 100., P0 = 30., sc = 0.5)
-    distance = Array(Float64,0)
-    path_loss = Array(Float64,0)
-    all_paths = Array(Float64,0)
-    pv = []
-    for (node_ind,image) in enumerate(image_tree)
-      path_vertices,associated_walls = get_path_vertices(image_tree,node_ind,Rx,plan)
-
-      if length(path_vertices)>0
-        dist_sum = get_path_distance(path_vertices)
-        append!(all_paths,[dist_sum;length(path_vertices)])
-        push!(pv,path_vertices)
-
-        # pl = 10^((P0-10*attenuation_exponent*log10(dist_sum/.1)-reflection_coef*(length(associated_walls)-2)+147.55-20*log10(2.4e9))/10)
-        pl = 10^( ( P0 - (10*ae*log10(dist_sum)+20*log10(2.4e9) - 147.55 + sc*rc*(length(associated_walls)-2))) /10.)
-        # pl = 10^( ( P0 - (20*log10(dist_sum)+20*log10(2.4e9) - 147.55) ) /10.)
-
-        push!(distance,dist_sum)
-        push!(path_loss,pl)
+  function caclulate_signal_strength_matrix(ssm::Array{Float64},image_tree::Array{treeNode},plan::mapPlan)
+    # add support for multiple resolutions
+    for x = 1:size(ssm,1)
+      for y = 1:size(ssm,2)
+        # incorporate cell size of type Float64
+        x_loc = Float64(x + plan.limits[1,1]) # multiply by cell size
+        y_loc = Float64(y + plan.limits[2,1]) # multiply by cell size
+        ssm[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan)
       end
     end
+    return ssm
+  end
 
-    if sum(path_loss)==0
-      value = -900
-    else
-      value = 10*log10(sum(path_loss))
+
+  function calculate_signal_strength(Rx::Array{Float64},image_tree::Array{treeNode},plan::mapPlan; ae = 2,rc = 12.53,tc = 5., P0 = 30., sc = 0.5, pldthr = 200.)
+
+    distance = Array(Float64,0)
+    reflections = Array(Int,0)
+    intersections = Array(Float64,0)
+    path_loss = Array(Float64,0)
+
+    used_images = 0
+    # all_paths = Array(Float64,0)
+
+    # pruned_branches = Set()
+
+    # pv = []
+    for (node_ind,image) in enumerate(image_tree)
+      if norm(image.location - Rx) > pldthr
+        continue
+      end
+
+      dist,nrw,wop = get_path_info(image_tree,node_ind,Rx,plan)
+
+      if dist!=-1.
+        used_images += 1
+        push!(distance,dist)
+        push!(reflections,nrw)
+        push!(intersections,wop)
+
+        pl = 10^( ( P0 - (10*ae*log10(dist)+20*log10(2.4e9) - 147.55 + sc*rc*nrw + tc*wop)) /10.)
+        push!(path_loss,pl)
+      end
+
+      # if length(path_vertices)>0
+      #   dist_sum = get_path_distance(path_vertices)
+      #   append!(all_paths,[dist_sum;length(path_vertices)])
+      #   push!(pv,path_vertices)
+      #
+      #   # pl = 10^((P0-10*attenuation_exponent*log10(dist_sum/.1)-reflection_coef*(length(associated_walls)-2)+147.55-20*log10(2.4e9))/10)
+      #   pl = 10^( ( P0 - (10*ae*log10(dist_sum)+20*log10(2.4e9) - 147.55 + sc*rc*(length(associated_walls)-2))) /10.)
+      #   # pl = 10^( ( P0 - (20*log10(dist_sum)+20*log10(2.4e9) - 147.55) ) /10.)
+      #
+      #   push!(distance,dist_sum)
+      #   push!(path_loss,pl)
+      # end
     end
 
-    return value,all_paths,pv
+    # println("$(used_images/length(image_tree)) images used")
+
+    pl_sum = sum(path_loss)
+    if pl_sum==0
+      value = -900.
+    else
+      value = 10*log10(pl_sum)
+    end
+
+    return value
   end
 
   function get_path_distance(path)
