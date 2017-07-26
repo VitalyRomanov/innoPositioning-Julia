@@ -3,6 +3,7 @@ cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 
 using CoverageMapProject
+using Plots
 
 
 last_session_available = false
@@ -52,8 +53,8 @@ end
 # proj.image_trees_ready = false
 # CoverageMapProject.calculate_image_trees(proj)
 
-# @time CoverageMapProject.calculate_coverage_map(proj)
-@time CoverageMapProject.recalculate_coverage_map(proj,1)
+CoverageMapProject.calculate_coverage_map(proj)
+# @time CoverageMapProject.recalculate_coverage_map(proj,1)
 # ProfileView.view()
-using Plots
-plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)
+
+# plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)

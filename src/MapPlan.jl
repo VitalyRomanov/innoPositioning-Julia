@@ -1,7 +1,8 @@
 module MapPlan
   using Geometry
   using MapPrimitives
-  using RadixTree
+  # using RadixTree
+  using PBSM
 
   export mapPlan
   export read_data,plot_walls,downsample_maps,no_walls_on_path,walls_on_path
@@ -10,12 +11,19 @@ module MapPlan
     walls::Array{Wall3D}
     # AP::Array{Float64}
     limits::Array{Int}
-    index::RadixTree.radixTree
+    # index::RadixTree.radixTree
+    index::PBSM.Pbsm
     vis_matr::Array{Bool}
   end
 
-  function query_walls(path::Line,wall_index::RadixTree.radixTree)
-    return RadixTree.probe(wall_index,line2mbr(path))
+  function query_walls(path::Line,wall_index)
+    # return RadixTree.probe(wall_index,line2mbr(path))
+    return PBSM.probe(wall_index,line2mbr(path))
+  end
+
+  function create_index(walls,lims)
+    # return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
+    return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
   end
 
 

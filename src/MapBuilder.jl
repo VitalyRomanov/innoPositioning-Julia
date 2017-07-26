@@ -313,7 +313,7 @@ module MapBuilder
   end
 
 
-  function calculate_signal_strength(Rx::Array{Float64},image_tree::Array{treeNode},plan::mapPlan; ae = 2,rc = 12.53,tc = 5., P0 = 30., sc = 0.5, pldthr = 200.)
+  function calculate_signal_strength(Rx::Array{Float64},image_tree::Array{treeNode},plan::mapPlan; ae = 2,rc = 12.53,tc = 5., P0 = 0., sc = 0.5, pldthr = 200.)
 
     distance = Array(Float64,0)
     reflections = Array(Int,0)
