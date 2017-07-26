@@ -151,8 +151,11 @@ function load_walls3D(data_file)
     lims[:,2] = maximum([coords lims[:,2]],2)
   end
 
+  lims[:,1] = floor(lims[:,1])
+  lims[:,2] = ceil(lims[:,2])
+
   println("$(length(walls)) walls imported")
-  return walls,convert(Array{Int},ceil(lims))
+  return walls,convert(Array{Int},lims)
 end
 
 

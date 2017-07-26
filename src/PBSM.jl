@@ -16,7 +16,7 @@ end
 
 type Sector
   id::Int
-  objects::Array{MBR}
+  objects::Array{Int}#Array{MBR}
   # geometry::Array{Array{Float64}}
   mbr::MBR
 end
@@ -44,13 +44,28 @@ function get_sector_ind(coord::Array{Float64},index::Pbsm)
   return (loc[2]-1)*index.grid_size[1]+loc[1]
 end
 
-function get_2d_sector_ind(coord,sector_size,sectors)
-  loc = convert(Int,ceil((coord - index.lims[1:2,1])/index.grid_scale))
-  return loc
+# function get_2d_sector_ind(coord,sector_size,sectors)
+#   loc = convert(Int,ceil((coord - index.lims[1:2,1])/index.grid_scale))
+#   return loc
+# end
+
+function grid_to_index(grid_coord::Array{Int},index::Pbsm)
+  # println(grid_coord," ",[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]])
+  ind = (grid_coord)'*[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]]+1
+  return ind[1]
 end
 
-function grid_to_index(grid_coord::Array{Int},grid_size::Array{Int})
-  return (grid_coord)'*[grid_size[2]*grid_size[1],grid_size[1],1]+1
+function coord_to_sec_index(coord::Array{Float64},index::Pbsm)
+  # test with negative coordinates
+  grid_coord = convert(Array{Int},floor((coord - index.lims[:,1])/index.grid_scale))
+  sector_index = (grid_coord)'*[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]]+1
+  return sector_index[1]
+end
+
+function coord_to_sec_coord(coord::Array{Float64},index::Pbsm)
+  # println("coord",coord)
+  # println("coord",coord/index.grid_scale)
+  return convert(Array{Int},floor((coord-index.lims[:,1])/index.grid_scale))
 end
 
 function prepare_sectors!(index::Pbsm)
@@ -63,14 +78,14 @@ function prepare_sectors!(index::Pbsm)
         geometry = Array(Array{Float64},4)
         v1 = [x_grid-1,y_grid-1,z_grid-1]*index.grid_scale+index.lims[:,1]
         v2 = [x_grid,y_grid,z_grid]*index.grid_scale+index.lims[:,1]
-        index.sectors[sector_count] = MBR(v1,v2)
+        index.sectors[sector_count] = Sector(sector_count,Array(MBR,0),MBR(v1,v2))
         # loc = [x_grid,y_grid,z_grid]*ones(Int,4)
         # loc = loc - [1,0,0,1;1,1,0,0]
         # for (ind,element) in enumerate(geometry)
         #   element = loc[:,ind]*index.grid_scale
         # end
         # index.sectors[sector_count] = Sector(Sector,Array(Wall,0),geometry)
-        println(sector_count," ",grid_to_index(v1,index.grid_size))
+        # println(sector_count," ",coord_to_sec_index(v1,index))
         sector_count+=1
       end
     end
@@ -92,15 +107,34 @@ function sector_intersected(line::Line,sector::Sector)
 end
 
 function find_intersected_sectors(object::MBR,index::Pbsm)
-  ind = [get_2d_sector_ind(object,v1) get_2d_sector_ind(object,v2)]
+  ind = [coord_to_sec_coord(object.v1,index) coord_to_sec_coord(object.v2,index)]
+
+  # println("Object ",object)
+  # println("sapce ",ind)
 
   intersected_sectors = Array(Int,0)
 
-  for (sec_ind,sector) in enumerate(index.sectors)
-    if overlap(sector.mbr,object)
-      append!(intersected_sectors,sec_ind)
+  ind[:,1] = maximum([ind[:,1] zeros(Int,nod,1)],2)
+  # println([ind[:,1] zeros(Int,nod,1)])
+  # println(maximum([ind[:,1] zeros(Int,nod,1)],2),"\n\n")
+
+  for x=ind[1,1]:ind[1,2]
+    for y=ind[2,1]:ind[2,2]
+      for z=ind[3,1]:ind[3,2]
+        si = grid_to_index([x,y,z],index)
+        # println(si)
+        if overlap(index.sectors[si].mbr,object)
+          append!(intersected_sectors,si)
+        end
+      end
     end
   end
+
+  # for (sec_ind,sector) in enumerate(index.sectors)
+  #   if overlap(sector.mbr,object)
+  #     append!(intersected_sectors,sec_ind)
+  #   end
+  # end
 
   return intersected_sectors
 
@@ -116,11 +150,11 @@ end
 
 
 
-function place_objects_on_grid(index::Pbsm)
-  for object in index.objects
-    ind = find_intersected_sectors(object,index)
-    for sector in index.sectors[ind]
-      append!(sector.objects,object)
+function place_objects_on_grid!(index::Pbsm)
+  for (obj_ind,object) in enumerate(index.objects)
+    sind = find_intersected_sectors(object,index)
+    for sector in index.sectors[sind]
+      push!(sector.objects,obj_ind)
     end
   end
 end
@@ -140,7 +174,7 @@ function create_index(objects,lims)
 
   grid_size = convert(Array{Int},ceil(space_size/grid_scale))
 
-  number_of_sector = prod(grid_scale)
+  number_of_sector = prod(grid_size)
 
   sectors = Array(Sector,number_of_sector)
 
@@ -150,11 +184,13 @@ function create_index(objects,lims)
                 space_size,
                 grid_size,
                 sectors,
-                lims[1:2,1:2])
+                lims)
 
   prepare_sectors!(index)
 
   place_objects_on_grid!(index)
+
+  return index
 
 end
 
@@ -164,6 +200,25 @@ end
 
 
 function probe(index::Pbsm,obj::MBR)
+
+  sind = find_intersected_sectors(obj,index)
+  # println(sind)
+  pairs = Array(Int,0)
+
+  for sector in index.sectors[sind]
+    for obj_ind in sector.objects
+      # println("Try")
+      # println(obj)
+      # println(index.objects[obj_ind])
+      # println()
+
+      if overlap(obj,index.objects[obj_ind])
+        push!(pairs,obj_ind)
+      end
+    end
+  end
+
+  return pairs
 
 end
 
