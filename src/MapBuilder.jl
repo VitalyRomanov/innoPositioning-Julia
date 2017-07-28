@@ -306,9 +306,11 @@ module MapBuilder
         # incorporate cell size of type Float64
         x_loc = Float64(x + plan.limits[1,1]) # multiply by cell size
         y_loc = Float64(y + plan.limits[2,1]) # multiply by cell size
-        ssm[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan)
+        @time ssm[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan)
+        print("\r$(x)/$(size(ssm,1)) $(y)/$(size(ssm,2))      ")
       end
     end
+    print("\n")
     return ssm
   end
 

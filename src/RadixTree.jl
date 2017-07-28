@@ -74,6 +74,10 @@ function determine_range(mortonCodes, i)
 	dir = leading_zeros(mortonCodes[i]$mortonCodes[i+1])-leading_zeros(mortonCodes[i]$mortonCodes[i-1])
 	d = (dir<0)?-1:1
 
+  if i<=6
+    println(leading_zeros(mortonCodes[i])," ",mortonCodes[i])
+  end
+
 	deltaMin = leading_zeros(current$mortonCodes[i-d])
 
   lMax = 1
@@ -157,7 +161,7 @@ end
 
 
 
-function assign_inner_nodes!(tree,IDs,mortonCodes)
+function assign_inner_nodes(tree,IDs,mortonCodes)
 
   dataSize = length(mortonCodes)
 
@@ -191,9 +195,13 @@ function assign_inner_nodes!(tree,IDs,mortonCodes)
     tree.parent[ancestors[1]] = i
     tree.parent[ancestors[2]] = i
 
+    # if (mortonCodes[i]==354906307)||(mortonCodes[i]==397834323)
+      println("$(i) $((mortonCodes[i])) $(rng) $(ancestors)")
+    # end
+
   end
 
-  # println("$(tree.parent)")
+  return tree
 end
 
 
@@ -224,7 +232,7 @@ function getNodeMBR(tree,objects,nodes)
 end
 
 
-function assignBV!(tree,objects)
+function assignBV(tree,objects)
   queued = Array(Bool,tree.numberOfInternalNodes)*false
 
   for i = 1:length(objects)
@@ -250,18 +258,21 @@ function assignBV!(tree,objects)
       end
     end
   end
+
+  return tree
 end
 
 
 function generate_hierarchy(tree,IDs,morton_codes,objects)
-  assign_inner_nodes!(tree,IDs,morton_codes)
+  tree = assign_inner_nodes(tree,IDs,morton_codes)
 
-  assignBV!(tree,objects)
+  # println("$(tree.parent)")
 
-
-  # for i=1:tree.numberOfInternalNodes
+  # for i=1:length(objects)*2-1
   #   println("Node $(i) $(bin(morton_codes[i])) cvg $(tree.coverage[i][1])-$(tree.coverage[i][2]) lc $(tree.chld[i][1]) rc $(tree.chld[i][2]) $(tree.mbr[i])")
   # end
+
+  tree = assignBV(tree,objects)
   #
   # for i = 1:length(IDs)
   #   println("Obj $(IDs[i]+tree.numberOfInternalNodes) $(objects[IDs[i]])")
@@ -274,10 +285,10 @@ function create_index(objects,lims)
   tree = radixTree(dataSize,
                     dataSize-1,
                     Array(MBR,dataSize),
-                    Array(Int,dataSize),
+                    zeros(Int,dataSize),
                     Array(Array{Int},dataSize),
                     Array(Array{Int},dataSize),
-                    Array(Int,dataSize*2-1),
+                    zeros(Int,dataSize*2-1),
                     Array(MBR,dataSize-1))
 
   tree.objects = deepcopy(objects)

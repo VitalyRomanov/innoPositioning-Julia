@@ -1,4 +1,4 @@
-current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
+current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
 cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 

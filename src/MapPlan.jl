@@ -1,8 +1,8 @@
 module MapPlan
   using Geometry
   using MapPrimitives
-  # using RadixTree
-  using PBSM
+  using RadixTree
+  # using PBSM
 
   export mapPlan
   export read_data,plot_walls,downsample_maps,no_walls_on_path,walls_on_path
@@ -11,19 +11,19 @@ module MapPlan
     walls::Array{Wall3D}
     # AP::Array{Float64}
     limits::Array{Int}
-    # index::RadixTree.radixTree
-    index::PBSM.Pbsm
+    index::RadixTree.radixTree
+    # index::PBSM.Pbsm
     vis_matr::Array{Bool}
   end
 
   function query_walls(path::Line,wall_index)
-    # return RadixTree.probe(wall_index,line2mbr(path))
-    return PBSM.probe(wall_index,line2mbr(path))
+    return RadixTree.probe(wall_index,line2mbr(path))
+    # return PBSM.probe(wall_index,line2mbr(path))
   end
 
   function create_index(walls,lims)
-    # return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
-    return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
+    return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
+    # return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
   end
 
 
@@ -168,7 +168,7 @@ module MapPlan
 
     visibility_matrix = Array(Bool,length(plan.walls),length(plan.walls))*false
     for (wall_id,wall) in enumerate(plan.walls)
-      println("\rInspecting wall $(wall_id)...    ")
+      print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
 
       shrkd_wll_plgn1 = shrink_polygon(wall.polygon,.2)
       # shrinked_wall1 = shrink_line(Line(wall.polygon[1],wall.polygon[3]),0.2)
@@ -211,6 +211,8 @@ module MapPlan
       end
       visibility_matrix[i,i] = false
     end
+
+    print("\n")
 
     return visibility_matrix
   end

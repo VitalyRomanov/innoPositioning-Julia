@@ -3,7 +3,7 @@ module PBSM
 using Geometry
 
 const nod = 3 # number of dimensions
-const grd_scl = 30.
+# const grd_scl = 30.
 
 
 function obj2mbr(walls,obj2mbr)
@@ -160,7 +160,7 @@ function place_objects_on_grid!(index::Pbsm)
 end
 
 
-function create_index(objects,lims)
+function create_index(objects,lims;grd_scl = 10.)
   dataSize = length(objects)
   space_size = lims[1:nod,2]-lims[1:nod,1]
 
