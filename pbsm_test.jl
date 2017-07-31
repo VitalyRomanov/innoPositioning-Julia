@@ -2,7 +2,8 @@ current_path = "/home/vromanov/dev/innoPositioning-Julia"
 current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
 push!(LOAD_PATH, "$(current_path)/src")
 
-using PBSM
+# using PBSM
+using RadixTree
 using MapPrimitives
 using Geometry
 
@@ -40,6 +41,10 @@ walls,lims = load_walls3D("$(current_path)/res/coverage/tables/walls.txt")
 
 # lims[:,1] = [-60,-30,-40]
 
-index = PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
+# index = PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
+index = RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
 
-pairs = PBSM.probe(index,Geometry.MBR([-1,-1,-1],[5,5,5]))
+# pairs = PBSM.probe(index,Geometry.MBR([-1,-1,-1],[5,5,5]))
+pairs = RadixTree.probe(index,Geometry.MBR([-1,-1,-1],[5,5,5]))
+pairs = RadixTree.probe(index,Geometry.MBR([30,-5,3],[30,30,3]))
+println(pairs)

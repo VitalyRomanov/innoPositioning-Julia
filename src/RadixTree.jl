@@ -71,12 +71,12 @@ function determine_range(mortonCodes, i)
   dataSize = length(mortonCodes)
 	current = mortonCodes[i]
 
-	dir = leading_zeros(mortonCodes[i]$mortonCodes[i+1])-leading_zeros(mortonCodes[i]$mortonCodes[i-1])
+	dir = leading_zeros(current$mortonCodes[i+1])-leading_zeros(current$mortonCodes[i-1])
 	d = (dir<0)?-1:1
 
-  if i<=6
-    println(leading_zeros(mortonCodes[i])," ",mortonCodes[i])
-  end
+  # if i<=7
+  #   println(leading_zeros(mortonCodes[i])," ",leading_zeros(mortonCodes[i+1])," ",leading_zeros(mortonCodes[i]$mortonCodes[i+1]))
+  # end
 
 	deltaMin = leading_zeros(current$mortonCodes[i-d])
 
@@ -91,7 +91,7 @@ function determine_range(mortonCodes, i)
 		elseif(nextPosition > dataSize)
 			break
     end
-		deltaCurrent = leading_zeros(current^mortonCodes[i+lMax*d])
+		deltaCurrent = leading_zeros(current$mortonCodes[i+lMax*d])
 	end
 
 	l = 0
@@ -102,7 +102,7 @@ function determine_range(mortonCodes, i)
     doit = false
 		nextPosition = 1
 		nextPosition = i+(l+t)*d
-		if (nextPosition<1)
+		if (nextPosition<1)#if (nextPosition<1)
 			nextPosition = 1
 		end
 		if (nextPosition > dataSize)
@@ -196,7 +196,7 @@ function assign_inner_nodes(tree,IDs,mortonCodes)
     tree.parent[ancestors[2]] = i
 
     # if (mortonCodes[i]==354906307)||(mortonCodes[i]==397834323)
-      println("$(i) $((mortonCodes[i])) $(rng) $(ancestors)")
+      # println("$(i) $((mortonCodes[i])) $(rng) $(ancestors)")
     # end
 
   end
@@ -306,7 +306,7 @@ end
 
 
 function overlap(tree::radixTree,objects::Array{MBR},ind::Int,obj::MBR)
-
+  # implement ray 3d-rectangle overlap check
   mbr1 = getMBR(tree,objects,ind)
   mbr2 = obj
 
@@ -314,11 +314,47 @@ function overlap(tree::radixTree,objects::Array{MBR},ind::Int,obj::MBR)
 end
 
 
+function ray_overlap(tree::radixTree,node_ind::Int,ray::Line)
+  node_mbr = getMBR(tree,tree.objects,node_ind)
+  # println(node_mbr)
+  mbr_proj = [
+          MBR(node_mbr.v1[1:2],node_mbr.v2[1:2]),
+          MBR(node_mbr.v1[2:3],node_mbr.v2[2:3])
+          ]
+  ray_proj = [
+          Line(ray.v1[1:2],ray.v2[1:2]),
+          Line(ray.v1[2:3],ray.v2[2:3])
+          ]
+  proj_overlap = [false,false]
+  for i=1:2
+    if prod(map(x->x>=0,([ray_proj[i].v1;mbr_proj[i].v2]-[mbr_proj[i].v1;ray_proj[i].v2])))
+      proj_overlap[i] = true #doesn't  work
+      continue
+    end
+    edges = enumerate_mbr2d_geometry(mbr_proj[i])
+    for edge in edges
+      if lines_crossed(ray_proj[i],edge)
+        proj_overlap[i] = true
+        break
+      end
+    end
+    if !proj_overlap[i]
+      break
+    end
+  end
+
+  return prod(proj_overlap)
+end
+
+
+
 function probe(tree::radixTree,obj::MBR)
   pairs = Array(Int,0)
   nodestack = Array(Int,0)
 
   objects = tree.objects
+  ray = Line(minimum([obj.v1 obj.v2],2),maximum([obj.v1 obj.v2],2))
+  # println(ray)
 
   # println(objects)
 
@@ -335,6 +371,12 @@ function probe(tree::radixTree,obj::MBR)
 
     overlapL = overlap(tree,objects,chld[1],obj)
     overlapR = overlap(tree,objects,chld[2],obj)
+    # overlapL = ray_overlap(tree,chld[1],ray)
+    # overlapR = ray_overlap(tree,chld[2],ray)
+
+    # println(overlapL,overlapR)
+
+    # println("Overlap results: $(overlapL):$(overlapLray)  $(overlapR):$(overlapRray)")
 
 
     leftLeaf = chld[1]>tree.numberOfInternalNodes

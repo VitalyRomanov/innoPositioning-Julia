@@ -2,7 +2,7 @@ module Geometry
 
   const float_err_marg = 0.001
 
-  export reflection_from_plane,get_direction_vector,point_is_on_line,point_is_in_rectangle,shrink_line,line2mbr,line_plane_intersection,lines_crossed,shrink_polygon
+  export reflection_from_plane,get_direction_vector,point_is_on_line,point_is_in_rectangle,shrink_line,line2mbr,line_plane_intersection,lines_crossed,shrink_polygon,enumerate_mbr2d_geometry
   export Line,MBR,float_err_marg
 
 
@@ -59,6 +59,16 @@ module Geometry
     end
     return polygon
   end
+
+  function enumerate_mbr2d_geometry(mbr2d::MBR)
+    paths = Array(Line,0)
+    push!(paths,Line(mbr2d.v1,[mbr2d.v1[1],mbr2d.v2[2]]))
+    push!(paths,Line([mbr2d.v1[1],mbr2d.v2[2]],mbr2d.v2))
+    push!(paths,Line(mbr2d.v2,[mbr2d.v2[1],mbr2d.v1[2]]))
+    push!(paths,Line([mbr2d.v2[1],mbr2d.v1[2]],mbr2d.v1))
+    return paths
+  end
+
 
 
   function get_direction_vector(v1::Array{Float64},v2::Array{Float64})

@@ -54,7 +54,7 @@ end
 # CoverageMapProject.calculate_image_trees(proj)
 
 CoverageMapProject.calculate_coverage_map(proj)
-# @time CoverageMapProject.recalculate_coverage_map(proj,1)
+CoverageMapProject.plot_map(proj,1)
 # ProfileView.view()
 
 # plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)

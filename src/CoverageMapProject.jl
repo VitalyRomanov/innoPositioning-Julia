@@ -5,6 +5,7 @@ using MapPrimitives
 using MapBuilder
 using MapPlan
 using ImageTree
+using Plots
 # using RadixTree
 using HDF5, JLD
 
@@ -197,6 +198,23 @@ function recalculate_coverage_map(project::CMProject,ap_ind)
   project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind], project.image_trees[ap_ind],project.plan)
 
   save_proj(project)
+end
+
+
+
+function plot_map(project::CMProject,map_ind)
+  plot(project.ssms[map_ind]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-100,0),legend = false,grid=false,axis=false)
+
+  for wall in project.plan.walls
+    xs = [wall.polygon[1][1],wall.polygon[4][1]]
+    ys = [wall.polygon[1][2],wall.polygon[4][2]]
+    plot!(xs,ys,
+        linecolor=:black,
+        xlims = project.plan.limits[1,:],
+        ylims = project.plan.limits[2,:],
+        legend = false)
+  end
+  savefig("map_$(map_ind).png")
 end
 
 

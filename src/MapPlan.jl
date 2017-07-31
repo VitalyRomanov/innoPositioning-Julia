@@ -1,8 +1,8 @@
 module MapPlan
   using Geometry
   using MapPrimitives
-  using RadixTree
-  # using PBSM
+  # using RadixTree
+  using PBSM
 
   export mapPlan
   export read_data,plot_walls,downsample_maps,no_walls_on_path,walls_on_path
@@ -11,19 +11,19 @@ module MapPlan
     walls::Array{Wall3D}
     # AP::Array{Float64}
     limits::Array{Int}
-    index::RadixTree.radixTree
-    # index::PBSM.Pbsm
+    # index::RadixTree.radixTree
+    index::PBSM.Pbsm
     vis_matr::Array{Bool}
   end
 
   function query_walls(path::Line,wall_index)
-    return RadixTree.probe(wall_index,line2mbr(path))
-    # return PBSM.probe(wall_index,line2mbr(path))
+    # return RadixTree.probe(wall_index,line2mbr(path))
+    return PBSM.probe(wall_index,line2mbr(path))
   end
 
   function create_index(walls,lims)
-    return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
-    # return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
+    # return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
+    return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
   end
 
 
@@ -221,6 +221,7 @@ module MapPlan
   function no_walls_on_path(path::Line,plan::mapPlan)
     path = shrink_line(path,float_err_marg)
     filtered_walls = plan.walls[query_walls(path,plan.index)]
+    # println("fw $(filtered_walls)\n")
     # filtered_walls = plan.walls[RadixTree.probe(plan.index,line2mbr(path))]
     for wall in filtered_walls
       if MapPrimitives.get_intersection_point(path,wall)!=-1

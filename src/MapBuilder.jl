@@ -301,15 +301,18 @@ module MapBuilder
 
   function caclulate_signal_strength_matrix(ssm::Array{Float64},image_tree::Array{treeNode},plan::mapPlan)
     # add support for multiple resolutions
+    # ss = SharedArray(Float64,size(ssm,1),size(ssm,2))
     for x = 1:size(ssm,1)
       for y = 1:size(ssm,2)
         # incorporate cell size of type Float64
         x_loc = Float64(x + plan.limits[1,1]) # multiply by cell size
         y_loc = Float64(y + plan.limits[2,1]) # multiply by cell size
-        @time ssm[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan)
+        ssm[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan)
         print("\r$(x)/$(size(ssm,1)) $(y)/$(size(ssm,2))      ")
       end
+      # print("\r$(x)/$(size(ss,1))      ")
     end
+    # ssm = deepcopy(ss)
     print("\n")
     return ssm
   end
