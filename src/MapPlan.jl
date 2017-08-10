@@ -81,35 +81,6 @@ module MapPlan
   end
 
 
-  # function read_data(data_file)
-  #   walls=Array(Wall,0)
-  #   input = open(data_file)
-  #   x_lims = [1.e50,-1.e50]
-  #   y_lims = [1.e50,-1.e50]
-  #   z_lims = [1.e50,-1.e50]
-  #   lims = Array{Int}
-  #   for (line_ind,line) in enumerate(eachline(input))
-  #     strvec = split(line,",")
-  #     v = map(x->parse(Float64,x),strvec)
-  #     new_wall = Wall(line_ind,[Point([v[1],v[2],v[3]]),Point([v[4],v[5],v[6]]),Point([v[7],v[8],v[9]]),Point([v[10],v[11],v[12]])],[0,0,0,0])
-  #     MapPrimitives.get_plane_equation(new_wall)
-  #     push!(walls,new_wall)
-  #     x_lims[1] = minimum([v[1],v[4],v[7],v[10],x_lims[1]])
-  #     x_lims[2] = maximum([v[1],v[4],v[7],v[10],x_lims[2]])
-  #     y_lims[1] = minimum([v[2],v[5],v[8],v[11],y_lims[1]])
-  #     y_lims[2] = maximum([v[2],v[5],v[8],v[11],y_lims[2]])
-  #     z_lims[1] = minimum([v[3],v[6],v[9],v[12],z_lims[1]])
-  #     z_lims[2] = maximum([v[3],v[6],v[9],v[12],z_lims[2]])
-  #
-  #     lims = convert(Array{Int},round([x_lims';y_lims';z_lims']))
-  #   end
-  #
-  #   println("$(length(walls)) walls imported")
-  #   return walls,convert(Array{Int},round(x_lims)),convert(Array{Int},round(y_lims)),lims
-  # end
-
-
-
   function create_all_vertex_paths(polygon1::Array{Array{Float64}},polygon2::Array{Array{Float64}})
     paths = Array(Line,length(polygon1)*length(polygon2))
     path_counter = 1
@@ -171,27 +142,14 @@ module MapPlan
       print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
 
       shrkd_wll_plgn1 = shrink_polygon(wall.polygon,.2)
-      # shrinked_wall1 = shrink_line(Line(wall.polygon[1],wall.polygon[3]),0.2)
       for (couple_ind,couple_wall) in enumerate(plan.walls[wall_id+1:end])
-
-        # if norm(couple_wall.polygon[1][1:2]-wall.polygon[1][1:2])>200
-        #   continue
-        # end
 
         shrkd_wll_plgn2 = shrink_polygon(couple_wall.polygon,.2)
 
         if shortest_polygon_distance(shrkd_wll_plgn1,shrkd_wll_plgn2) > 200.
           continue
         end
-        # shrinked_wall2 = shrink_line(Line(couple_wall.polygon[1],couple_wall.polygon[3]),0.2)
 
-
-
-        # paths = Array(Line,4)
-        # paths[1] = Line(shrinked_wall1.v1,shrinked_wall2.v1)
-        # paths[2] = Line(shrinked_wall1.v1,shrinked_wall2.v2)
-        # paths[3] = Line(shrinked_wall1.v2,shrinked_wall2.v1)
-        # paths[4] = Line(shrinked_wall1.v2,shrinked_wall2.v2)
         paths = create_all_vertex_paths(shrkd_wll_plgn1,shrkd_wll_plgn2)
 
         result = false
@@ -221,8 +179,6 @@ module MapPlan
   function no_walls_on_path(path::Line,plan::mapPlan)
     path = shrink_line(path,float_err_marg)
     filtered_walls = plan.walls[query_walls(path,plan.index)]
-    # println("fw $(filtered_walls)\n")
-    # filtered_walls = plan.walls[RadixTree.probe(plan.index,line2mbr(path))]
     for wall in filtered_walls
       if MapPrimitives.get_intersection_point(path,wall)!=-1
         return false
@@ -233,7 +189,6 @@ module MapPlan
 
   function walls_on_path(path::Line,plan::mapPlan)
     path = shrink_line(path,float_err_marg)
-    # filtered_walls = plan.walls[RadixTree.probe(plan.index,line2mbr(path))]
     filtered_walls = plan.walls[query_walls(path,plan.index)]
     wop = 0
     for wall in filtered_walls

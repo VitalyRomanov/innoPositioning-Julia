@@ -1,4 +1,5 @@
-current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
+# current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
+current_path = "/home/vromanov/dev/innoPositioning-Julia"
 cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 
@@ -53,8 +54,11 @@ end
 # proj.image_trees_ready = false
 # CoverageMapProject.calculate_image_trees(proj)
 
-CoverageMapProject.calculate_coverage_map(proj)
+# CoverageMapProject.calculate_coverage_map(proj)
+# CoverageMapProject.plot_map(proj,1)
+
+params = CoverageMapProject.fit_parameters(proj,1)
+CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 CoverageMapProject.plot_map(proj,1)
-# ProfileView.view()
 
 # plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)

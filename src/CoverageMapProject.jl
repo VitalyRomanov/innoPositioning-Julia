@@ -6,8 +6,18 @@ using MapBuilder
 using MapPlan
 using ImageTree
 using Plots
+using StatPlots
 # using RadixTree
 using HDF5, JLD
+using DataFrames
+using Optim
+
+
+type Measurement
+  loc_id::Int
+  location::Array{Float64}
+  rssi::Array{Float64}
+end
 
 type CMProject
   path_init_data::String
@@ -24,11 +34,35 @@ type CMProject
   # Flags
   image_trees_ready::Bool
   coverage_maps_ready::Bool
+  measur_avail::Bool
 
   # Counters
   ssms_ready_count::Int
 
+  # Measurements
+  measur::Array{Measurement}
+
 end
+
+
+function read_measurements(path)
+  measur_avail = isdir("$(path)/loc")
+  measur = Array(Measurement,0)
+  if measur_avail
+    for file in readdir("$(path)/loc")
+      if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
+        loc_id = parse(Int,file[1:end-4])
+        location = mean(Array(readtable("$(path)/loc/$(file)",header = false)),1)
+        rssi = Array(readtable("$(path)/rssi/$(file)",header = false)[:,2])
+        push!(measur,Measurement(loc_id,location[:],rssi))
+      end
+    end
+  end
+
+  return measur_avail,measur
+end
+
+
 
 function create_project(init_path,save_path,name)
   aps = load_aps("$(init_path)/aps.txt")
@@ -44,6 +78,9 @@ function create_project(init_path,save_path,name)
     push!(ssms,zeros(Float64,map_plan.limits[1,2]-map_plan.limits[1,1],map_plan.limits[2,2]-map_plan.limits[2,1]))
   end
 
+  measur_avail,measur = read_measurements("$(init_path)")
+
+
   project = CMProject(init_path,
                       save_path,
                       name,
@@ -54,7 +91,9 @@ function create_project(init_path,save_path,name)
                       ssms,
                       image_trees_ready,
                       coverage_maps_ready,
-                      ssms_ready_count)
+                      measur_avail,
+                      ssms_ready_count,
+                      measur)
 
   save_proj(project)
 
@@ -91,13 +130,15 @@ function save_proj(project::CMProject)
                   "ssms",project.ssms,
                   "image_trees_ready",project.image_trees_ready,
                   "coverage_maps_ready",project.coverage_maps_ready,
-                  "ssms_ready_count",project.ssms_ready_count)
+                  "measur_avail",project.measur_avail,
+                  "ssms_ready_count",project.ssms_ready_count,
+                  "measur",project.measur)
   # save("$(project.path_save_data)/$(project.project_name).jld","CMProject",project)
 end
 
 function load_project(path)
-  path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,ssms_ready_count = JLD.load("$(path)","init_path","save_path","proj_name","aps","ap_visibilities","mapplan","image_trees","ssms","image_trees_ready","coverage_maps_ready","ssms_ready_count")
-  return CMProject(path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,ssms_ready_count)
+  path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,measur_avail,ssms_ready_count,measur = JLD.load("$(path)","init_path","save_path","proj_name","aps","ap_visibilities","mapplan","image_trees","ssms","image_trees_ready","coverage_maps_ready","measur_avail","ssms_ready_count","measur")
+  return CMProject(path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,measur_avail,ssms_ready_count,measur)
 end
 
 function create_map_plan(init_path,aps)
@@ -176,14 +217,17 @@ function calculate_image_trees(project::CMProject)
 end
 
 
-function calculate_coverage_map(project::CMProject)
+function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.])
   if project.coverage_maps_ready
     println("Coverage maps are calculated")
     return
   end
 
   for ap_ind = project.ssms_ready_count+1:length(project.APs)
-    project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind], project.image_trees[ap_ind],project.plan)
+    project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind],
+                                                                      project.image_trees[ap_ind],
+                                                                      project.plan,
+                                                                      parameters)
 
 
     # push!(project.ssms,ssm)
@@ -201,11 +245,11 @@ function recalculate_coverage_map(project::CMProject,ap_ind)
 end
 
 
-
-function plot_map(project::CMProject,map_ind)
-  plot(project.ssms[map_ind]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-100,0),legend = false,grid=false,axis=false)
-
+function plot_walls!(project::CMProject)
   for wall in project.plan.walls
+    if wall.polygon[1][3]==wall.polygon[3][3]
+      continue
+    end
     xs = [wall.polygon[1][1],wall.polygon[4][1]]
     ys = [wall.polygon[1][2],wall.polygon[4][2]]
     plot!(xs,ys,
@@ -214,22 +258,146 @@ function plot_map(project::CMProject,map_ind)
         ylims = project.plan.limits[2,:],
         legend = false)
   end
-  savefig("map_$(map_ind).png")
+end
+
+
+function plot_map(project::CMProject,map_ind)
+  ssm = project.ssms[map_ind]'
+
+  rssi_min = -100.
+  rssi_max = maximum(ssm)
+
+  # for x = 1:size(ssm,1), y = 1:size(ssm,2)
+  #   if ssm[x,y] < rssi_min && ssm[x,y] > -900.
+  #     rssi_min = ssm[x,y]
+  #   end
+  # end
+
+  println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
+
+  plot(ssm,
+      seriestype=:heatmap,
+      seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),
+      zlims=(rssi_min,rssi_max),
+      legend = false,
+      grid=false,
+      axis=false)
+
+  plot_walls!(project)
+
+  plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
+
+  savefig("$(project.path_save_data)/map_$(map_ind).png")
+end
+
+
+function plot_paths(project::CMProject,paths,mp_ind)
+  plot(size(600,600),
+      axis = false)
+  plot_walls!(project)
+
+  for path in paths
+    for i=1:length(path)-1
+      plot!([path[i][1],path[i+1][1]],[path[i][2],path[i+1][2]],linecolor=:red)
+    end
+  end
+
+  if !isdir("$(project.path_save_data)/paths")
+    mkdir("$(project.path_save_data)/paths")
+  end
+
+  savefig("$(project.path_save_data)/paths/$(mp_ind).svg")
+end
+
+
+function fit_parameters(project::CMProject,ap_id::Int)
+  # X stores matrices that contain information about different signal paths
+  # to a measurement point. The matrix X[i] has 7 columns (parameters) and
+  # N rows (paths to the current location)
+  # Y stores M observations of rssi at a measurement point
+  X = Array(Array{Float64},0)
+  Y = Array(Array{Float64},0)
+
+  fs = 7 # font size for plot annotations
+
+  dist = [] #distance from meas. point to AP
+
+  # initial value for pathloss parameters
+  # the firts several parameters are fixed
+  # see fmin() for details
+  theta = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]
+  for (meas_ind,measur) in enumerate(project.measur)
+    x = MapBuilder.signal_paths_info(measur.location[:],
+                                project.image_trees[ap_id],
+                                project.plan)
+    paths = MapBuilder.calculate_paths(measur.location[:],
+                                project.image_trees[ap_id],
+                                project.plan)
+    plot_paths(project,paths,meas_ind)
+    x = [ones(Float64,size(x,1),4) x]
+    push!(X,x)
+    push!(Y,measur.rssi)
+    dist = [dist;norm(project.APs[ap_id]-measur.location)]
+  end
+
+  theta,min_val = fmin(theta,X,Y)
+  # divide cost function by the number of observations
+  rms_error = sqrt(min_val/sum(map(i->length(Y[i]),1:length(Y))))
+  println("\nRMS $(rms_error); Optimal Parameters:\nGain: $(theta[4])\nAttenuation exponent: $(-theta[5])\nReflection coefficient: $(theta[6])\nTransmission coefficient: $(theta[7])\n")
+  #calculate estimated signal strength using fit parameters
+  mean_rssi = map(i->10*log10(sum(10.^(X[i]*theta/10))),1:length(X))
+
+  # create a plot with specified parameters
+  # this plot will contain the area map in the first subplot and
+  # comparison of the observed and estimated rssi values in the second
+  plot(legend = false,
+      grid=false,
+      # axis=false,
+      size=(900,1800),
+      layout=grid(2,1,heights=[.5,.5]))
+  plot_walls!(project)
+
+
+  order = sortperm(dist)
+
+  plot!(dist[order],mean_rssi[order],legend=false,subplot=2)
+  plot!([project.APs[ap_id][1]],[project.APs[ap_id][2]],
+      markershape=:diamond,
+      markercolor=:pink,
+      subplot = 1)
+
+  for elem in order
+    x = project.measur[elem].location[1]
+    y = project.measur[elem].location[2]
+    plot!([x],[y],
+        markershape=:diamond,
+        markercolor=:blue,
+        subplot = 1)
+    annotate!(x,y+2*fs/10,text("$elem",fs),subplot = 1)
+    boxplot!([dist[elem]],project.measur[elem].rssi,lab="Loc $(elem)",subplot = 2)
+    annotate!(dist[elem]*1.01,mean(project.measur[elem].rssi)*1.01,text("$elem"),subplot = 2)
+  end
+
+  savefig("$(project.path_save_data)/all_it_takes.svg")
+
+  return theta
 end
 
 
 
+
+function fmin(theta,X,Y)
+  # pos-1 parameters are left from the optimization procedure
+  const pos = 4
+  cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2),1:length(X)))
+  # cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2)/length(Y[i]),1:length(X)))
+  res = optimize(cost,theta[pos:7],LBFGS())
+  return [theta[1:pos-1];Optim.minimizer(res)],Optim.minimum(res)
 end
 
 
-# function load_visibility_matrix(visibility_matrix_path,plan::mapPlan)
-#   if isfile(visibility_matrix_path)
-#     println("Loading visibility matrix")
-#     visibility_matrix = load(visibility_matrix_path,"visibility_matrix")
-#   else
-#     println("Visibility matrix not found. Calculating...")
-#     visibility_matrix = create_wall_visibility_matrix(plan)
-#     save(visibility_matrix_path,"visibility_matrix",visibility_matrix)
-#   end
-#   return visibility_matrix
-# end
+
+
+
+
+end

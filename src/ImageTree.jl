@@ -3,7 +3,6 @@ module ImageTree
   using Geometry
   using MapPrimitives
   using MapPlan
-  # using RadixTree
 
 
   export treeNode,calculate_offsprings,build_image_tree
@@ -74,44 +73,6 @@ module ImageTree
     if image.level < max_levels
       # if the image is the root image no prior knowledge of wall visibility is available
       feasible_walls = get_feasible_walls(image_tree,image,plan,AP_visibility)
-      # if image.assigned_wall == -1
-      #   feasible_walls = plan.walls[find(AP_visibility)]
-      # else
-      #   visible_walls = plan.walls[find(plan.vis_matr[image.assigned_wall,:])]
-      #
-      #   parent_wall = image_tree[image.parent].assigned_wall
-      #   if parent_wall == -1
-      #     parent_ref = image_tree[1].location
-      #   else
-      #     parent_ref = point_on_wall(plan.walls[parent_wall])
-      #   end
-      #   feasible_walls = walls_on_the_same_side(visible_walls,parent_ref,plan.walls[image.assigned_wall])
-      #   # current_wall = plan.walls[image.assigned_wall]
-      #   # parent_position = normal_directed_towards_point(parent_reference,current_wall)
-      # end
-
-      # we are going to reduce the number of feasible walls
-      # temp_feasible_walls = Array(Wall3D,length(feasible_walls))
-      # temp_position = 1
-
-      # the distance between the original image and the current image is not a very good measure of feasibility
-      # instead we can calculate the sum distance between consecutive images that will give the distance lowe bound
-      # for wall in feasible_walls
-      #   if norm(wall.polygon[1]-image_tree[1].location)<distance_threshold
-      #     if image.assigned_wall == -1
-      #       truly_feasible =  no_walls_on_path(Line(image.location,(wall.polygon[1]+wall.polygon[4])/2),plan)
-      #     else
-      #       truly_feasible = (parent_position==normal_directed_towards_point(wall.polygon[1],current_wall))
-      #     end
-      #
-      #     if truly_feasible
-      #       temp_feasible_walls[temp_position] = wall
-      #       temp_position += 1
-      #     end
-      #   end
-      # end
-
-      # feasible_walls = temp_feasible_walls[1:temp_position-1]
 
       for wall in feasible_walls
         position = reflection_from_plane(image.location,wall.plane_eq)
@@ -160,55 +121,6 @@ module ImageTree
     c = (-wall.plane_eq[4]-t1)/t2
     pow = test_pos+direction_vect.*c
     return dot(pow-test_pos,direction_vect)<=0
-    # slope = (reference_wall.polygon[4][2]-reference_wall.polygon[1][2])/(reference_wall.polygon[4][1]-reference_wall.polygon[1][1])
-    # bias = reference_wall.polygon[4][2] - slope * reference_wall.polygon[4][1]
-    # return test_pos[2] > slope * test_pos[2] + bias
   end
 
-  # function calculate_offsprings(image::treeNode,image_id::Int,tree_size::Int,walls::Array{Wall},AP::Point,visibility_matrix;max_levels = 3, distance_threshold = 150)
-  #   offsprings = Array(treeNode,length(walls))
-  #   children = Array(Int,length(walls))
-  #   real_offsprings = 0
-  #   current_offset = 0
-  #
-  #   if image.level < max_levels
-  #     if image.assigned_wall == -1
-  #       feasible_walls = walls
-  #     else
-  #       feasible_walls = walls[find(visibility_matrix[image.assigned_wall,:])]
-  #     end
-  #     for wall in feasible_walls
-  #       if norm(wall.points[1].val-AP.val)<distance_threshold
-  #         if wall.id != image.assigned_wall
-  #           paths = Array(Line,2)
-  #           paths[1] = Line(image.location.val[1:2],wall.points[1].val[1:2])
-  #           paths[2] = Line(image.location.val[1:2],wall.points[4].val[1:2])
-  #
-  #           wall_visible = false
-  #           for path in paths
-  #             if no_walls_on_path(path,wall_ind)
-  #               wall_visible = true
-  #               break
-  #             end
-  #           end
-  #           if wall_visible
-  #             cp = dot([image.location.val;1],wall.plane_equation)/norm(wall.plane_equation[1:3])^2
-  #             position = image.location.val-2*wall.plane_equation[1:3].*cp
-  #             new_image = MapPrimitives.Point(position)
-  #             new_node = ImageTree.treeNode(new_image,image.level+1,image_id,Array(Int,0),wall.id)
-  #             # push!(image.children,tree_size+current_offset)
-  #             # push!(offsprings,new_node)
-  #             real_offsprings += 1
-  #             current_offset+=1
-  #             offsprings[real_offsprings] = new_node
-  #             children[real_offsprings] = tree_size+current_offset
-  #           end
-  #         end
-  #       end
-  #     end
-  #   end
-  #   # potentially there can be a problem of not all valuable nodes included in the tree
-  #   image.children = children[1:real_offsprings]
-  #   return offsprings[1:real_offsprings]
-  # end
 end

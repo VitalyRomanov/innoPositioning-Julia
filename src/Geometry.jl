@@ -79,26 +79,6 @@ module Geometry
     return line.v2-line.v1
   end
 
-  # function get_intersection_point(v1,v2,plane)
-  #   intersect_epsilon = 0.1
-  #   direction_vector = get_direction_vector(v1,v2)
-  #   cp = plane.plane_eq[1:3]
-  #   num = dot(cp,(plane.points[1].val-v1))
-  #   denom = dot(cp,direction_vector)
-  #   if denom == 0.
-  #     return -1
-  #   end
-  #   t = num / denom
-  #   if t > intersect_epsilon
-  #     ip = v1+direction_vector.*t
-  #     if point_is_on_line(v1,v2,ip)
-  #       if point_is_in_rectangle(ip, plane)
-  #         return ip
-  #       end
-  #     end
-  #   end
-  #   return -1
-  # end
 
   function line_plane_intersection(line::Line,plane::Array{Float64})
     direction_vector = Geometry.get_direction_vector(line)
@@ -115,29 +95,6 @@ module Geometry
     end
   end
 
-  # function get_intersection_point(line::Line,wall::Wall3D)
-  #   direction_vector = get_direction_vector(line)
-  #   cp = plane.plane_eq[1:3]
-  #   num = dot(cp,(plane.polygon[1]-line.v1))
-  #   denom = dot(cp,direction_vector)
-  #   if denom == 0.
-  #     return -1
-  #   end
-  #   t = num / denom
-  #   if t > float_err_marg
-  #     ip = line.v1+direction_vector.*t
-  #     if point_is_on_line(line,ip)
-  #       if point_is_in_rectangle(ip, plane)
-  #         return ip
-  #       end
-  #     end
-  #   end
-  #   return -1
-  # end
-
-  # function point_is_on_line(v1,v2,ip)
-  #   return dot(v1-ip,v2-ip)<=0
-  # end
 
   function point_is_on_line(line::Line,ip::Array{Float64})
     return dot(line.v1-ip,line.v2-ip)<=0
