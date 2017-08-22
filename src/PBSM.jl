@@ -50,7 +50,6 @@ end
 # end
 
 function grid_to_index(grid_coord::Array{Int},index::Pbsm)
-  # println(grid_coord," ",[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]])
   ind = (grid_coord)'*[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]]+1
   return ind[1]
 end
@@ -110,13 +109,15 @@ function find_intersected_sectors(object::MBR,index::Pbsm)
   ind = [coord_to_sec_coord(object.v1,index) coord_to_sec_coord(object.v2,index)]
 
   # println("Object ",object)
-  # println("sapce ",ind)
+  # println("Space ",ind)
+  # println("Test: $(coord_to_sec_coord([-47.,-30,1],index))")
 
   intersected_sectors = Array(Int,0)
 
-  ind[:,1] = maximum([ind[:,1] zeros(Int,nod,1)],2)
-  # println([ind[:,1] zeros(Int,nod,1)])
-  # println(maximum([ind[:,1] zeros(Int,nod,1)],2),"\n\n")
+
+  # ind[:,1] = maximum([ind[:,1] zeros(Int,nod,1)],2) # this makes sure that
+  # there are no negative index. Should the min value be 1?????
+
 
   for x=ind[1,1]:ind[1,2]
     for y=ind[2,1]:ind[2,2]
@@ -164,6 +165,9 @@ function create_index(objects,lims;grd_scl = 10.)
   dataSize = length(objects)
   space_size = lims[1:nod,2]-lims[1:nod,1]
 
+  println("Lims: $lims")
+
+
   for i=1:length(space_size)
     if space_size[i]==0
       space_size[i] = 1
@@ -174,7 +178,11 @@ function create_index(objects,lims;grd_scl = 10.)
 
   grid_size = convert(Array{Int},ceil(space_size/grid_scale))
 
+  println("Grid size: $grid_size")
+
   number_of_sector = prod(grid_size)
+
+  println("Number of secors: $number_of_sector")
 
   sectors = Array(Sector,number_of_sector)
 

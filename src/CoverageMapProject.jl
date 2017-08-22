@@ -145,7 +145,7 @@ function create_map_plan(init_path,aps)
   walls,lims = load_walls3D("$(init_path)/walls.txt")
 
   # index = RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
-  index = MapPlan.create_index(walls,lims)
+  index = MapPlan.create_index(walls,lims,30.)
 
   plan = MapPlan.mapPlan(walls,lims,index,Array(Bool))
 
