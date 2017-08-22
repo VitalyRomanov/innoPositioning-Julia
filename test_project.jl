@@ -57,7 +57,8 @@ end
 # CoverageMapProject.calculate_coverage_map(proj)
 # CoverageMapProject.plot_map(proj,1)
 
-params = CoverageMapProject.fit_parameters(proj,1)
+# params = CoverageMapProject.fit_parameters(proj,1)
+params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
 CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 CoverageMapProject.plot_map(proj,1)
 
