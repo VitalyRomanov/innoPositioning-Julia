@@ -21,9 +21,9 @@ module MapPlan
     return PBSM.probe(wall_index,line2mbr(path))
   end
 
-  function create_index(walls,lims)
+  function create_index(walls,lims,grid_scl = 10.)
     # return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
-    return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims)
+    return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims,grd_scl = grid_scl)
   end
 
 
