@@ -1,6 +1,6 @@
-# current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
+current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
 # current_path = "/home/vromanov/dev/innoPositioning-Julia"
-current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
+# current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
 cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 
@@ -37,9 +37,9 @@ if resp==1
   # load_path = strip(readline())
   # print("Enter saving location: ")
   # save_path = strip(readline())
-  name = "town"
-  load_path = "/Users/LTV/Dropbox/Work/coverage/town"
-  save_path = "/Users/LTV/Dropbox/Work/coverage/town"
+  name = "town2"
+  load_path = "/home/ltv/Dropbox/work/coverage/town"
+  save_path = "/home/ltv/Dropbox/work/coverage/town"
   proj = CoverageMapProject.create_project(load_path,save_path,name)
   CoverageMapProject.save_session("$(save_path)/$(name).jld")
   CoverageMapProject.calculate_image_trees(proj)

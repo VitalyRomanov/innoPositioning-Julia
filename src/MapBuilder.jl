@@ -143,6 +143,9 @@ module MapBuilder
 
       dist,nrw,wop = get_path_info(image_tree,node_ind,Rx,plan)
 
+    #   this is intended to skip paths that go through walls
+      if wop>0 continue end
+
       if dist!=-1.
         used_images += 1
         push!(distance,dist)

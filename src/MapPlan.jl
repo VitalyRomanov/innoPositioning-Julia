@@ -136,11 +136,17 @@ module MapPlan
 
 
   function create_wall_visibility_matrix(plan::mapPlan)
-
-    visibility_matrix = Array(Bool,length(plan.walls),length(plan.walls))*false
-    for (wall_id,wall) in enumerate(plan.walls)
+    function initfc(S::SharedArray)
+        for s in eachindex(S)
+            S[s] = false
+        end
+    end
+    visibility_matrix = SharedArray{Bool}((length(plan.walls),length(plan.walls)),init=initfc)
+    # visibility_matrix = Array(Bool,length(plan.walls),length(plan.walls))*false
+    # for (wall_id,wall) in enumerate(plan.walls)
+    @sync @parallel for wall_id = 1:length(plan.walls)
       print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
-
+      wall = plan.walls[wall_id]
       shrkd_wll_plgn1 = shrink_polygon(wall.polygon,.2)
       for (couple_ind,couple_wall) in enumerate(plan.walls[wall_id+1:end])
 
@@ -172,7 +178,7 @@ module MapPlan
 
     print("\n")
 
-    return visibility_matrix
+    return convert(Array,visibility_matrix)
   end
 
 
