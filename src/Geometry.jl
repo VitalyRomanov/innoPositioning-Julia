@@ -6,19 +6,20 @@ module Geometry
   export Line,MBR,float_err_marg
 
 
-  type Line
-    v1::Array{Float64}
-    v2::Array{Float64}
+  struct Line
+    v1::Vector{Float64}
+    v2::Vector{Float64}
   end
 
-  type MBR
+  struct MBR
     v1::Array{Float64}
     v2::Array{Float64}
   end
 
   function line2mbr(line::Line)
-    v1 = minimum([line.v1 line.v2],2)
-    v2 = maximum([line.v1 line.v2],2)
+    temp = [line.v1 line.v2]
+    v1 = minimum(temp,2)
+    v2 = maximum(temp,2)
     return MBR(v1,v2)
   end
 

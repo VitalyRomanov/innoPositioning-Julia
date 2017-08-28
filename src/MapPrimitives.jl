@@ -5,21 +5,23 @@ module MapPrimitives
   export Point, Wall3D, Sector, Wall
   export get_plane_equation!,wall2mbr,get_intersection_point
 
-  type Wall3D
+  struct Wall3D
     id::Int
-    polygon::Array{Array{Float64}}
-    plane_eq::Array{Float64}
+    polygon::Vector{Vector{Float64}}
+    plane_eq::Vector{Float64}
   end
 
-  type Point
-    val::Array{Float64}
-  end
+  Wall3D(id,polygon) = Wall3D(id,polygon,get_plane_equation(polygon))
 
-  type Wall
-    id::Int
-    points::Array{Point}
-    plane_equation::Array{Float64}
-  end
+  # type Point
+  #   val::Array{Float64}
+  # end
+
+  # type Wall
+  #   id::Int
+  #   points::Array{Point}
+  #   plane_equation::Array{Float64}
+  # end
 
   type Sector
     id::Int
@@ -35,15 +37,15 @@ module MapPrimitives
   end
 
 
-  function get_plane_equation(cw::Wall)
-    equation = [.0,.0,.0,.0]
-    equation[1] = (cw.points[2].val[2]-cw.points[1].val[2])*(cw.points[3].val[3]-cw.points[1].val[3])-(cw.points[3].val[2]-cw.points[1].val[2])*(cw.points[2].val[3]-cw.points[1].val[3])
-    equation[2] = -((cw.points[2].val[1]-cw.points[1].val[1])*(cw.points[3].val[3]-cw.points[1].val[3])-(cw.points[3].val[1]-cw.points[1].val[1])*(cw.points[2].val[3]-cw.points[1].val[3]))
-    equation[3] = (cw.points[2].val[1]-cw.points[1].val[1])*(cw.points[3].val[2]-cw.points[1].val[2])-(cw.points[3].val[1]-cw.points[1].val[1])*(cw.points[2].val[2]-cw.points[1].val[2])
-    equation[4] = -cw.points[1].val[1]*equation[1]-cw.points[1].val[2]*equation[2]-cw.points[1].val[3]*equation[3]
-    cw.plane_equation = equation
-    return equation
-  end
+  # function get_plane_equation(cw::Wall)
+  #   equation = [.0,.0,.0,.0]
+  #   equation[1] = (cw.points[2].val[2]-cw.points[1].val[2])*(cw.points[3].val[3]-cw.points[1].val[3])-(cw.points[3].val[2]-cw.points[1].val[2])*(cw.points[2].val[3]-cw.points[1].val[3])
+  #   equation[2] = -((cw.points[2].val[1]-cw.points[1].val[1])*(cw.points[3].val[3]-cw.points[1].val[3])-(cw.points[3].val[1]-cw.points[1].val[1])*(cw.points[2].val[3]-cw.points[1].val[3]))
+  #   equation[3] = (cw.points[2].val[1]-cw.points[1].val[1])*(cw.points[3].val[2]-cw.points[1].val[2])-(cw.points[3].val[1]-cw.points[1].val[1])*(cw.points[2].val[2]-cw.points[1].val[2])
+  #   equation[4] = -cw.points[1].val[1]*equation[1]-cw.points[1].val[2]*equation[2]-cw.points[1].val[3]*equation[3]
+  #   cw.plane_equation = equation
+  #   return equation
+  # end
 
   function get_plane_equation!(cw::Wall3D)
     equation = [.0,.0,.0,.0]
@@ -52,6 +54,16 @@ module MapPrimitives
     equation[3] = (cw.polygon[2][1]-cw.polygon[1][1])*(cw.polygon[3][2]-cw.polygon[1][2])-(cw.polygon[3][1]-cw.polygon[1][1])*(cw.polygon[2][2]-cw.polygon[1][2])
     equation[4] = -cw.polygon[1][1]*equation[1]-cw.polygon[1][2]*equation[2]-cw.polygon[1][3]*equation[3]
     cw.plane_eq = equation
+  end
+
+
+  @inline function get_plane_equation(polygon)
+    equation = [.0,.0,.0,.0]
+    equation[1] = (polygon[2][2]-polygon[1][2])*(polygon[3][3]-polygon[1][3])-(polygon[3][2]-polygon[1][2])*(polygon[2][3]-polygon[1][3])
+    equation[2] = -((polygon[2][1]-polygon[1][1])*(polygon[3][3]-polygon[1][3])-(polygon[3][1]-polygon[1][1])*(polygon[2][3]-polygon[1][3]))
+    equation[3] = (polygon[2][1]-polygon[1][1])*(polygon[3][2]-polygon[1][2])-(polygon[3][1]-polygon[1][1])*(polygon[2][2]-polygon[1][2])
+    equation[4] = -polygon[1][1]*equation[1]-polygon[1][2]*equation[2]-polygon[1][3]*equation[3]
+    return equation
   end
 
 
