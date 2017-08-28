@@ -2,16 +2,16 @@ module Geometry
 
   const float_err_marg = 0.001
 
-  export reflection_from_plane,get_direction_vector,point_is_on_line,point_is_in_rectangle,shrink_line,line2mbr,line_plane_intersection,lines_crossed,shrink_polygon,enumerate_mbr2d_geometry
+  export reflection_from_plane,get_direction_vector,point_is_on_line,point_is_in_rectangle,shrink_line!,line2mbr,line_plane_intersection,lines_crossed,shrink_polygon,enumerate_mbr2d_geometry
   export Line,MBR,float_err_marg
 
 
-  struct Line
-    v1::Vector{Float64}
-    v2::Vector{Float64}
+  type Line
+    v1::Array{Float64}
+    v2::Array{Float64}
   end
 
-  struct MBR
+  type MBR
     v1::Array{Float64}
     v2::Array{Float64}
   end
@@ -25,11 +25,12 @@ module Geometry
 
   function reflection_from_plane(point,plane)
     # make sure the reflection is on the side of the plane that is closer to the second vertex
-    cp = dot([point;1],plane)/norm(plane[1:3])^2
+    cp = (dot(point,plane[1:3])+plane[4])/dot(plane[1:3],plane[1:3])
+    # cp = dot([point;1],plane)/norm(plane[1:3])^2
     return point-2*plane[1:3].*cp
   end
 
-  function shrink_line(line::Line,absolute_shrinkage_value)
+  function shrink_line!(line::Line,absolute_shrinkage_value)
     eps = line.v2-line.v1
     if norm(eps)==0
       return line
@@ -61,14 +62,14 @@ module Geometry
     return polygon
   end
 
-  function enumerate_mbr2d_geometry(mbr2d::MBR)
-    paths = Array(Line,0)
-    push!(paths,Line(mbr2d.v1,[mbr2d.v1[1],mbr2d.v2[2]]))
-    push!(paths,Line([mbr2d.v1[1],mbr2d.v2[2]],mbr2d.v2))
-    push!(paths,Line(mbr2d.v2,[mbr2d.v2[1],mbr2d.v1[2]]))
-    push!(paths,Line([mbr2d.v2[1],mbr2d.v1[2]],mbr2d.v1))
-    return paths
-  end
+  # function enumerate_mbr2d_geometry(mbr2d::MBR)
+  #   paths = Array(Line,0)
+  #   push!(paths,Line(mbr2d.v1,[mbr2d.v1[1],mbr2d.v2[2]]))
+  #   push!(paths,Line([mbr2d.v1[1],mbr2d.v2[2]],mbr2d.v2))
+  #   push!(paths,Line(mbr2d.v2,[mbr2d.v2[1],mbr2d.v1[2]]))
+  #   push!(paths,Line([mbr2d.v2[1],mbr2d.v1[2]],mbr2d.v1))
+  #   return paths
+  # end
 
 
 
@@ -76,7 +77,7 @@ module Geometry
     return v2-v1
   end
 
-  function get_direction_vector(line::Line)
+  @inline function get_direction_vector(line::Line)
     return line.v2-line.v1
   end
 
@@ -117,27 +118,27 @@ module Geometry
   end
 
 
-  function lines_crossed(line1::Line,line2::Line)
-    a = line1.v1[2] - line1.v2[2]
-    b = line1.v2[1] - line1.v1[1]
-    c = (line1.v2[2] - line1.v1[2])*line1.v1[1] - (line1.v2[1] - line1.v1[1])*line1.v1[2]
-
-    d = line2.v1[2] - line2.v2[2]
-    e = line2.v2[1] - line2.v1[1]
-    f = (line2.v2[2] - line2.v1[2])*line2.v1[1] - (line2.v2[1] - line2.v1[1])*line2.v1[2]
-
-    den = (-d*b + a*e)
-
-    if den == 0
-      return false
-    end
-
-    y = (c*d - f*a) / den
-    x = (b*f - c*e) / den
-
-    ip = [x,y]
-
-    return dot(line1.v1-ip,line1.v2-ip)<=0 && dot(line2.v1-ip,line2.v2-ip)<=0
-  end
+  # function lines_crossed(line1::Line,line2::Line)
+  #   a = line1.v1[2] - line1.v2[2]
+  #   b = line1.v2[1] - line1.v1[1]
+  #   c = (line1.v2[2] - line1.v1[2])*line1.v1[1] - (line1.v2[1] - line1.v1[1])*line1.v1[2]
+  #
+  #   d = line2.v1[2] - line2.v2[2]
+  #   e = line2.v2[1] - line2.v1[1]
+  #   f = (line2.v2[2] - line2.v1[2])*line2.v1[1] - (line2.v2[1] - line2.v1[1])*line2.v1[2]
+  #
+  #   den = (-d*b + a*e)
+  #
+  #   if den == 0
+  #     return false
+  #   end
+  #
+  #   y = (c*d - f*a) / den
+  #   x = (b*f - c*e) / den
+  #
+  #   ip = [x,y]
+  #
+  #   return dot(line1.v1-ip,line1.v2-ip)<=0 && dot(line2.v1-ip,line2.v2-ip)<=0
+  # end
 
 end

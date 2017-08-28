@@ -5,10 +5,10 @@ module MapPrimitives
   export Point, Wall3D, Sector, Wall
   export get_plane_equation!,wall2mbr,get_intersection_point
 
-  struct Wall3D
+  type Wall3D
     id::Int
-    polygon::Vector{Vector{Float64}}
-    plane_eq::Vector{Float64}
+    polygon::Array{Array{Float64}}
+    plane_eq::Array{Float64}
   end
 
   Wall3D(id,polygon) = Wall3D(id,polygon,get_plane_equation(polygon))
