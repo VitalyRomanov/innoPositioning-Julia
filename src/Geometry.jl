@@ -11,6 +11,8 @@ module Geometry
     v2::Array{Float64}
   end
 
+  Line() = Line([0.,0,0],[0.,0,0])
+
   type MBR
     v1::Array{Float64}
     v2::Array{Float64}
@@ -38,7 +40,7 @@ module Geometry
     eps = absolute_shrinkage_value*eps/norm(eps)
     line.v2 -= eps
     line.v1 += eps
-    return line
+    # return line
   end
 
   function shrink_polygon(pol::Array{Array{Float64}},absolute_shrinkage_value)

@@ -25,21 +25,21 @@ while !(resp in 1:options)
     print("\t3 - load last project\n")
   end
   print("Enter option: ")
-  resp = 1
-  # resp = parse(Int,readline())
+  # resp = 1
+  resp = parse(Int,readline())
 end
 
 
 if resp==1
-  # print("Enter new project name: ")
-  # name = readline()[1:end-1]
-  # print("Enter path for initial data: ")
-  # load_path = strip(readline())
-  # print("Enter saving location: ")
-  # save_path = strip(readline())
-  name = "town2"
-  load_path = "/home/ltv/Dropbox/work/coverage/town"
-  save_path = "/home/ltv/Dropbox/work/coverage/town"
+  print("Enter new project name: ")
+  name = readline()[1:end-1]
+  print("Enter path for initial data: ")
+  load_path = strip(readline())
+  print("Enter saving location: ")
+  save_path = strip(readline())
+  # name = "town2"
+  # load_path = "/home/ltv/Dropbox/work/coverage/town"
+  # save_path = "/home/ltv/Dropbox/work/coverage/town"
   proj = CoverageMapProject.create_project(load_path,save_path,name)
   CoverageMapProject.save_session("$(save_path)/$(name).jld")
   CoverageMapProject.calculate_image_trees(proj)

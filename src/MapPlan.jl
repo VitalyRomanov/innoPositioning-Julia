@@ -109,8 +109,8 @@ module MapPlan
 
 
   function create_ap_visibility(plan::mapPlan,AP)
-    ap_visibility = Array(Bool,length(plan.walls))*false
-    ap_list = push!(Array(Array{Float64},0),AP)
+    ap_visibility = Array{Bool}(length(plan.walls))*false
+    ap_list = push!(Array{Array{Float64}}(0),AP)
 
     for (couple_ind,couple_wall) in enumerate(plan.walls)
       shrkd_wll_plgn2 = shrink_polygon(couple_wall.polygon,.2)
@@ -119,15 +119,24 @@ module MapPlan
         continue
       end
 
-      paths = create_all_vertex_paths(ap_list,shrkd_wll_plgn2)
-
       result = false
-      for path in paths
-        if no_walls_on_path(path,plan)
+      test_path = Line()
+      test_path.v1 = AP
+      for vertex in shrkd_wll_plgn2
+        test_path.v2 = vertex
+        if no_walls_on_path(test_path,plan)
           result = true
           break
         end
       end
+      # paths = create_all_vertex_paths(ap_list,shrkd_wll_plgn2)
+      # result = false
+      # for path in paths
+      #   if no_walls_on_path(path,plan)
+      #     result = true
+      #     break
+      #   end
+      # end
       ap_visibility[couple_ind] = result
     end
     return ap_visibility
@@ -156,15 +165,25 @@ module MapPlan
           continue
         end
 
-        paths = create_all_vertex_paths(shrkd_wll_plgn1,shrkd_wll_plgn2)
-
-        result = false
-        for path in paths
-          if no_walls_on_path(path,plan)
+        test_path = Line(); result = false
+        for v1 in shrkd_wll_plgn1, v2 in shrkd_wll_plgn2
+          test_path.v1 = v1; test_path.v2 = v2;
+          if no_walls_on_path(test_path,plan)
             result = true
             break
           end
         end
+
+
+        # paths = create_all_vertex_paths(shrkd_wll_plgn1,shrkd_wll_plgn2)
+        #
+        # result = false
+        # for path in paths
+        #   if no_walls_on_path(path,plan)
+        #     result = true
+        #     break
+        #   end
+        # end
         visibility_matrix[wall_id,wall_id+couple_ind] = result
       end
     end
@@ -183,7 +202,7 @@ module MapPlan
 
 
   function no_walls_on_path(path::Line,plan::mapPlan)
-    path = shrink_line(path,float_err_marg)
+    shrink_line!(path,float_err_marg)
     filtered_walls = plan.walls[query_walls(path,plan.index)]
     for wall in filtered_walls
       if MapPrimitives.get_intersection_point(path,wall)!=-1
@@ -194,7 +213,7 @@ module MapPlan
   end
 
   function walls_on_path(path::Line,plan::mapPlan)
-    path = shrink_line(path,float_err_marg)
+    shrink_line!(path,float_err_marg)
     filtered_walls = plan.walls[query_walls(path,plan.index)]
     wop = 0
     for wall in filtered_walls

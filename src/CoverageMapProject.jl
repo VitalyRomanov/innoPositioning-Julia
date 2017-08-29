@@ -149,7 +149,7 @@ function create_map_plan(init_path,aps)
 
   plan = MapPlan.mapPlan(walls,lims,index,Array(Bool))
 
-  vis_matr = MapPlan.create_wall_visibility_matrix(plan)
+  @time vis_matr = MapPlan.create_wall_visibility_matrix(plan)
 
   plan.vis_matr = vis_matr
 
