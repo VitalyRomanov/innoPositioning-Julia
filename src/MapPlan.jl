@@ -30,7 +30,7 @@ module MapPlan
 
   function downsample_maps(signal_maps,factor)
     println("Downsampling maps")
-    new_maps = Array(Array{Float64},length(signal_maps))
+    new_maps = Array{Array{Float64}}(length(signal_maps))
     for (ind,map) in enumerate(signal_maps)
       new_maps[ind] = downsample_map(map,2)
     end
@@ -39,7 +39,7 @@ module MapPlan
 
   function downsample_map(signal_map,factor)
     new_size = [Int(floor(size(signal_map,1)/factor)),Int(floor(size(signal_map,2)/factor))]
-    new_map = Array(Float64,new_size[1],new_size[2])
+    new_map = Array{Float64}(new_size[1],new_size[2])
     for i=1:new_size[1]
       for j=1:new_size[2]
         ii = (i-1)*factor+1
@@ -82,7 +82,7 @@ module MapPlan
 
 
   function create_all_vertex_paths(polygon1::Array{Array{Float64}},polygon2::Array{Array{Float64}})
-    paths = Array(Line,length(polygon1)*length(polygon2))
+    paths = Array{Line}(length(polygon1)*length(polygon2))
     path_counter = 1
     for i = 1:length(polygon1)
       for j = 1:length(polygon2)
@@ -214,8 +214,13 @@ module MapPlan
 
   function walls_on_path(path::Line,plan::mapPlan)
     shrink_line!(path,float_err_marg)
-    filtered_walls = plan.walls[query_walls(path,plan.index)]
     wop = 0
+    # for wall_id in query_walls(path,plan.index)
+    #     if MapPrimitives.get_intersection_point(path,plan.walls[wall_id])!=-1
+    #         wop += 1
+    #     end
+    # end
+    filtered_walls = plan.walls[query_walls(path,plan.index)]
     for wall in filtered_walls
       if MapPrimitives.get_intersection_point(path,wall)!=-1
         wop += 1

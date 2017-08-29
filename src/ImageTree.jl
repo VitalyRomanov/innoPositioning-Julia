@@ -17,7 +17,7 @@ module ImageTree
 
 
   function walls_on_the_same_side(walls, ref_wall_point, refl_wall)
-    # plane_eq = refl_wall.plane_eq
+
     temp = normal_directed_towards_point(ref_wall_point,refl_wall)
     correct_side = map(x->(temp==normal_directed_towards_point(wall_center(x),refl_wall)),walls)
     return walls[find(correct_side)]
@@ -39,16 +39,26 @@ module ImageTree
 
   function get_feasible_walls(image_tree,image,plan,AP_visibility)
     if image.assigned_wall == -1
+        # when considering wall visibility from the position of AP
+        # we can instantly decide what is visible
       feasible_walls = plan.walls[find(AP_visibility)]
     else
+        # otherwise we need to use two step filtering
+        # first we find walls that are visible from the posiotion of reflection
+        # wall
       visible_walls = plan.walls[find(plan.vis_matr[image.assigned_wall,:])]
 
+    #   then we divide the space into two regions: on both sides of
+    #   reflection wall
+    #   define the reference position
       parent_wall = image_tree[image.parent].assigned_wall
       if parent_wall == -1
         parent_ref = image_tree[1].location
       else
         parent_ref = point_on_wall(plan.walls[parent_wall])
       end
+    #   we say that the target wall should be located on the same side
+    #   of the reflection wall as the parent wall
       feasible_walls = walls_on_the_same_side(visible_walls,parent_ref,plan.walls[image.assigned_wall])
       # current_wall = plan.walls[image.assigned_wall]
       # parent_position = normal_directed_towards_point(parent_reference,current_wall)
@@ -63,8 +73,8 @@ module ImageTree
     # 2. Otherwise visibility matrix is used to determine whether the wall is visible from the standpoint of reflection wall
     # 3. The images should be built only for walls that are on the same side as the previous secondary source
     tree_size = length(image_tree)
-    offsprings = Array(treeNode,length(plan.walls))
-    children = Array(Int,length(plan.walls))
+    offsprings = Array{treeNode}(length(plan.walls))
+    children = Array{Int}(length(plan.walls))
     real_offsprings = 0
     current_offset = 0
 
@@ -76,7 +86,7 @@ module ImageTree
 
       for wall in feasible_walls
         position = reflection_from_plane(image.location,wall.plane_eq)
-        new_node = ImageTree.treeNode(position,image.level+1,image_id,Array(Int,0),wall.id,norm(position-image.location)/2)
+        new_node = ImageTree.treeNode(position,image.level+1,image_id,Array{Int}(0),wall.id,norm(position-image.location)/2)
         real_offsprings += 1
         current_offset += 1
         offsprings[real_offsprings] = new_node
@@ -91,7 +101,7 @@ module ImageTree
 
 
   function build_image_tree(plan::mapPlan,AP::Array{Float64},AP_visibility::Array{Bool}; pl_thr_dist = 180.)
-    image_tree = Array(treeNode,0)
+    image_tree = Array{treeNode}(0)
 
     root = treeNode(AP,0,-1,[],-1,0.)
     push!(image_tree,root)

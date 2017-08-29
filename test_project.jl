@@ -1,6 +1,6 @@
-current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
+# current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
 # current_path = "/home/vromanov/dev/innoPositioning-Julia"
-# current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
+current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
 cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 
@@ -25,7 +25,7 @@ while !(resp in 1:options)
     print("\t3 - load last project\n")
   end
   print("Enter option: ")
-  # resp = 1
+  # resp = 3
   resp = parse(Int,readline())
 end
 
@@ -42,7 +42,7 @@ if resp==1
   # save_path = "/home/ltv/Dropbox/work/coverage/town"
   proj = CoverageMapProject.create_project(load_path,save_path,name)
   CoverageMapProject.save_session("$(save_path)/$(name).jld")
-  CoverageMapProject.calculate_image_trees(proj)
+  # CoverageMapProject.calculate_image_trees(proj)
 elseif resp==2
   print("Enter existing project location :")
   proj_path = strip(readline())
@@ -66,6 +66,7 @@ end
 # params = CoverageMapProject.fit_parameters(proj,1)
 params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
 CoverageMapProject.calculate_coverage_map(proj,parameters = params)
-CoverageMapProject.plot_map(proj,1)
+# CoverageMapProject.recalculate_coverage_map(proj,1,parameters = params)
+# CoverageMapProject.plot_map(proj,1)
 
 # plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)
