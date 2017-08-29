@@ -47,7 +47,7 @@ end
 
 function read_measurements(path)
   measur_avail = isdir("$(path)/loc")
-  measur = Array(Measurement)(0)
+  measur = Array{Measurement}(0)
   if measur_avail
     for file in readdir("$(path)/loc")
       if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
@@ -147,9 +147,13 @@ function create_map_plan(init_path)
   # index = RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
   index = MapPlan.create_index(walls,lims,30.)
 
-  plan = MapPlan.mapPlan(walls,lims,index,Array(Bool))
+  plan = MapPlan.mapPlan(walls,lims,index,Array{Bool}(0))
 
-  vis_matr = MapPlan.create_wall_visibility_matrix(plan)
+  if !isfile("$(init_path)/vm.jld")
+    vis_matr = MapPlan.create_wall_visibility_matrix(plan)
+  else
+    vis_matr = JLD.load("$(init_path)/vm.jld","vm")
+  end
 
   plan.vis_matr = vis_matr
 
@@ -194,8 +198,8 @@ function load_walls3D(data_file)
     lims[:,2] = maximum([coords lims[:,2]],2)
   end
 
-  lims[:,1] = floor(lims[:,1])
-  lims[:,2] = ceil(lims[:,2])
+  lims[:,1] = floor.(lims[:,1])
+  lims[:,2] = ceil.(lims[:,2])
 
   println("$(length(walls)) walls imported")
   return walls,convert(Array{Int},lims)
@@ -237,7 +241,8 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
     AP = project.APs[ap_ind]
 
     println("Creating visibility index for AP $(ap_ind)")
-    ap_vis = MapPlan.create_ap_visibility(project.plan,AP);
+    ap_vis = MapPlan.create_ap_visibility(project.plan,AP)
+    # println(ap_vis)
     println("Creating image tree for AP $(ap_ind)")
     im_tree = ImageTree.build_image_tree(project.plan,
                                           AP,
@@ -247,7 +252,7 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
                                                       project.plan,
                                                       parameters)
     JLD.save("$(project.path_save_data)/ssm_$(ap_ind).jld","ssm",ssm)
-    plot_map(ssm)
+    plot_map(ssm,project,ap_ind)
     # project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind],
     #                                                                   project.image_trees[ap_ind],
     #                                                                   project.plan,
@@ -285,7 +290,7 @@ function plot_walls!(project::CMProject)
 end
 
 
-function plot_map(ssm)
+function plot_map(ssm,project,map_ind)
     rssi_min = -100.
     rssi_max = maximum(ssm)
 
@@ -305,12 +310,12 @@ function plot_map(ssm)
         grid=false,
         axis=false)
 
-    # plot_walls!(project)
+    plot_walls!(project)
 
-    # plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
+    plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
 
-    # savefig("$(project.path_save_data)/map_.png")
-    savefig("map_.png")
+    savefig("$(project.path_save_data)/map_$(map_ind).png")
+    # savefig("map_.png")
 end
 
 function plot_map(project::CMProject,map_ind)

@@ -44,7 +44,7 @@ module Geometry
   end
 
   function shrink_polygon(pol::Array{Array{Float64}},absolute_shrinkage_value)
-    polygon = Array(Array{Float64},0)
+    polygon = Array{Array{Float64}}(0)
     if length(pol)>0
       center = 0
       for v in pol

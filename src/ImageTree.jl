@@ -66,7 +66,7 @@ module ImageTree
     return feasible_walls
   end
 
-  function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,plan::mapPlan,AP_visibility::Array{Bool};max_levels = 3, dist_thr = 150)
+  function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,plan::mapPlan,AP_visibility;max_levels = 3, dist_thr = 150)
     # This function calculates the offsprings of a particular image in the image tree.
     # It is crucial to reduce the number of irrelevant images as much a possible. For this reason several optimizations are done.
     # 1. If the node is the root node, the walls are checked for being visible from the standpoint of the access point.
@@ -100,7 +100,7 @@ module ImageTree
 
 
 
-  function build_image_tree(plan::mapPlan,AP::Array{Float64},AP_visibility::Array{Bool}; pl_thr_dist = 180.)
+  function build_image_tree(plan::mapPlan,AP::Array{Float64},AP_visibility; pl_thr_dist = 180.)
     image_tree = Array{treeNode}(0)
 
     root = treeNode(AP,0,-1,[],-1,0.)

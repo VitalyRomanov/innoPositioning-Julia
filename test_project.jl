@@ -1,11 +1,12 @@
-# current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
+current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
 # current_path = "/home/vromanov/dev/innoPositioning-Julia"
-current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
+# current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
 cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 
 using CoverageMapProject
 using Plots
+using JLD
 
 
 last_session_available = false
@@ -64,6 +65,7 @@ end
 # CoverageMapProject.plot_map(proj,1)
 
 # params = CoverageMapProject.fit_parameters(proj,1)
+# JLD.save("/home/ltv/Documents/coverage/town/vm.jld","vm",proj.plan.vis_matr)
 params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
 CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 # CoverageMapProject.recalculate_coverage_map(proj,1,parameters = params)

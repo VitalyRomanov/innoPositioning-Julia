@@ -7,7 +7,7 @@ const nod = 3 # number of dimensions
 
 
 function obj2mbr(walls,obj2mbr)
-  mbrs = Array(MBR,length(walls))
+  mbrs = Array{MBR}(length(walls))
   for (wall_ind,wall) in enumerate(walls)
     mbrs[wall_ind] = obj2mbr(wall)
   end
@@ -40,7 +40,7 @@ end
 
 
 function get_sector_ind(coord::Array{Float64},index::Pbsm)
-  loc = convert(Int,ceil((coord - index.lims[1:2,1])/index.grid_scale))
+  loc = convert(Int,ceil.((coord - index.lims[1:2,1])/index.grid_scale))
   return (loc[2]-1)*index.grid_size[1]+loc[1]
 end
 
@@ -56,7 +56,7 @@ end
 
 function coord_to_sec_index(coord::Array{Float64},index::Pbsm)
   # test with negative coordinates
-  grid_coord = convert(Array{Int},floor((coord - index.lims[:,1])/index.grid_scale))
+  grid_coord = convert(Array{Int},floor.((coord - index.lims[:,1])/index.grid_scale))
   sector_index = (grid_coord)'*[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]]+1
   return sector_index[1]
 end
@@ -64,7 +64,7 @@ end
 function coord_to_sec_coord(coord::Array{Float64},index::Pbsm)
   # println("coord",coord)
   # println("coord",coord/index.grid_scale)
-  return convert(Array{Int},floor((coord-index.lims[:,1])/index.grid_scale))
+  return convert(Array{Int},floor.((coord-index.lims[:,1])/index.grid_scale))
 end
 
 function prepare_sectors!(index::Pbsm)
@@ -74,10 +74,10 @@ function prepare_sectors!(index::Pbsm)
   for z_grid = 1:index.grid_size[3]
     for y_grid = 1:index.grid_size[2]
       for x_grid = 1:index.grid_size[1]
-        geometry = Array(Array{Float64},4)
+        geometry = Array{Array{Float64}}(4)
         v1 = [x_grid-1,y_grid-1,z_grid-1]*index.grid_scale+index.lims[:,1]
         v2 = [x_grid,y_grid,z_grid]*index.grid_scale+index.lims[:,1]
-        index.sectors[sector_count] = Sector(sector_count,Array(MBR,0),MBR(v1,v2))
+        index.sectors[sector_count] = Sector(sector_count,Array{MBR}(0),MBR(v1,v2))
         # loc = [x_grid,y_grid,z_grid]*ones(Int,4)
         # loc = loc - [1,0,0,1;1,1,0,0]
         # for (ind,element) in enumerate(geometry)
@@ -112,7 +112,7 @@ function find_intersected_sectors(object::MBR,index::Pbsm)
   # println("Space ",ind)
   # println("Test: $(coord_to_sec_coord([-47.,-30,1],index))")
 
-  intersected_sectors = Array(Int,0)
+  intersected_sectors = Array{Int}(0)
 
 
   # ind[:,1] = maximum([ind[:,1] zeros(Int,nod,1)],2) # this makes sure that
@@ -176,7 +176,7 @@ function create_index(objects,lims;grd_scl = 10.)
 
   grid_scale = grd_scl
 
-  grid_size = convert(Array{Int},ceil(space_size/grid_scale))
+  grid_size = convert(Array{Int},ceil.(space_size/grid_scale))
 
   println("Grid size: $grid_size")
 
@@ -184,7 +184,7 @@ function create_index(objects,lims;grd_scl = 10.)
 
   println("Number of secors: $number_of_sector")
 
-  sectors = Array(Sector,number_of_sector)
+  sectors = Array{Sector}(number_of_sector)
 
   index = Pbsm(dataSize,
                 objects,
@@ -211,7 +211,7 @@ function probe(index::Pbsm,obj::MBR)
 
   sind = find_intersected_sectors(obj,index)
   # println(sind)
-  pairs = Array(Int,0)
+  pairs = Array{Int}(0)
 
   for sector in index.sectors[sind]
     for obj_ind in sector.objects
