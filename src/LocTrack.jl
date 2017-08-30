@@ -2,7 +2,7 @@ module LocTrack
 
   # dt = 1
 
-  const rssi_sigma = 0.01
+  const rssi_sigma = 0.01 # rssi noise stdev
 
   export getSpaceInfo,estimate_path_viterbi,RssiRecord,PModelParam,pmodel_space,path_to_rssi,path_generation
 
@@ -26,6 +26,7 @@ module LocTrack
 
   ##### Auxiliary functions
 
+  # modify in accordance with performance guidelines
   function normpdf(x,m,s)
     return exp(-((x-m)./s).^2/2)./(sqrt(2*pi)*s)
   end
@@ -236,83 +237,139 @@ module LocTrack
 
 
 
-  function estimate_path_viterbi(signals::Array{RssiRecord},signal_map::Array{Array{Float64}},spaceInfo::SpaceInfo;seed = [-1. -1.], testing = false,ip = [],ipu = [])
+  function estimate_path_viterbi(signals::Array{RssiRecord},
+                                  signal_map::Array{Array{Float64}},
+                                  spaceInfo::SpaceInfo;
+                                  seed = [-1. -1.],
+                                  testing = false,
+                                  ip = [],
+                                  ipu = [])
 
-    # print("Entering estimation function \n")
+    # This function estimates the trajectory of a network user based on
+    # the history of observed signal strength. Input arguments are
+    #
+    # signals - sequence of observed rssi that contains rssi, assosiated AP id,
+    #           and the time difference from the previous sample
+    # signal_map - contains signal strength matrices that cover all the map for
+    #               all available APs. Each matrix in signal_map is a signal
+    #               strength map for an AP with id
+    # spaceInfo - contains information about space configuration such as map
+    #             grid size, the size of a cell on a grid, etc.
+    # seed - initial location guessed by the viterbi algorithm. Used for testing
+    #         purposes. May be excluded in the future.
+    # testing - testing flag. Used to indicate whether additional output is
+    #           needed
+    # ip - ???
+    # ipu - ???
+    #
+    # Probabilities in this function are subject to overflow and undeflow.
+    # In order to cope with this problem probability scaling is used
 
-    grid_space_size = spaceInfo.grid[1]*spaceInfo.grid[2]
+
+    grid_space_size = spaceInfo.grid[1]*spaceInfo.grid[2] # total number of cells in the grid
     # trellis = zeros(Float64,grid_space_size,length(signals))-1e10
     # velocity = zeros(Float64,grid_space_size,2,length(signals))
-    trellis = zeros(Float64,grid_space_size,2)-1e10
-    velocity = zeros(Float64,grid_space_size,2,2)
-    path_back = zeros(Int32,grid_space_size,length(signals))
+    trellis = zeros(Float64,grid_space_size,2)-1e10 # stores previous and current state probability
+    velocity = zeros(Float64,grid_space_size,2,2) # stores previous and current state velocity in xy dimensions
+    path_back = zeros(Int32,grid_space_size,length(signals)) # stores feasible paths
 
-    # print("Initializing the first step \n")
 
+    # initialize state probabilities based on seed location, or assume
+    # equal probabilities
     init_step = zeros(Float64,spaceInfo.grid[1],spaceInfo.grid[2])
     if seed==[-1. -1.]
       init_step = uniform_location(spaceInfo)
     else
       init_step = seed_location(seed,spaceInfo)#*1e100
       if testing
-        print("Initial location seeded at, ", fold_index(indmax(init_step),spaceInfo), " and ", fold_index(ipu[1],spaceInfo), " is expected\n")
+        print("Initial location seeded at, ",
+              fold_index(indmax(init_step),spaceInfo),
+              " and ",
+              fold_index(ipu[1],spaceInfo),
+              " is expected\n")
       end
     end
 
 
-    print("Calculating RSSI dictribution \n")
-    p_rssi = rssi_logdistribution(signals[1].rssi,signal_map[signals[1].ap],spaceInfo) # the value is boosted by exp(100)
+    # calculate log distribution. log allows to use sum instead of product
+    # This is used to initialize probabilities in trellis
+    p_rssi = rssi_logdistribution(signals[1].rssi,
+                                  signal_map[signals[1].ap],
+                                  spaceInfo) # the value is boosted by exp(100)
+
     # if testing
-    #   print("Maximum signal proability is at ", fold_index(indmax(p_rssi),spaceInfo)," and ", fold_index(ipu[1],spaceInfo), " is expected \n")
+    #   print("Maximum signal proability is at ",
+    #           fold_index(indmax(p_rssi),spaceInfo),
+    #           " and ",
+    #           fold_index(ipu[1],spaceInfo),
+    #           " is expected \n")
     # end
 
-    trellis[:,1] = combine_logprob(p_rssi,init_step) # the sum is 1e100
+    # Combines initial probabilities
+    trellis[:,1] = combine_logprob(p_rssi,init_step) # values sum to 1e100
 
-    # old_p_rssi = p_rssi
 
+    # Start processing rssi signals
     for i = 1:1:length(signals)-1
+
+      # whenever there is no time difference between consecutive measurements,
+      # assume that we did not change location
       if signals[i+1].dt==0.
-        # trellis[:,i+1],velocity[:,:,i+1] = trellis[:,i],velocity[:,:,i]
-        # trellis[:,2],velocity[:,:,2] = trellis[:,1],velocity[:,:,1]
         for ii=1:length(path_back[:,i+1])
           path_back[ii,i+1] = ii
         end
         continue
       end
-      tic()
-      println("Step $i, dt = $(signals[i+1].dt)")
 
-      p_rssi = rssi_logdistribution(signals[i+1].rssi,signal_map[signals[i+1].ap],spaceInfo)
+      # tic()
+      # println("Step $i, dt = $(signals[i+1].dt)")
+
+      # Location probabilities based on rssi
+      p_rssi = rssi_logdistribution(signals[i+1].rssi,
+                                    signal_map[signals[i+1].ap],
+                                    spaceInfo)
+
       if testing
-        print("Maximum signal proability on the next step is at ", fold_index(indmax(p_rssi),spaceInfo), " and ", fold_index(ipu[i+1],spaceInfo), " is expected\n")
+        print("Maximum signal proability on the next step is at ",
+              fold_index(indmax(p_rssi),spaceInfo),
+              " and ",
+              fold_index(ipu[i+1],spaceInfo),
+              " is expected\n")
       end
 
-      last = 0.
-      nnw = 0.
 
       for state in 1:1:grid_space_size
-        # nnw = (state*100./grid_space_size)
-        # if nnw-last>10.
-        #   last = nnw
-        #   print("\r$(last)%                           ")
-        # end
-        # the sum is 1e100
-        if (trellis[state,1]>-100)
+        # iterate over states in trellis for exhaustive optimum search
 
-          p_transition,v_transition = transition_logdistribution(state,velocity[state,:,1],spaceInfo,signals[i+1].dt)
+        # continue onlu if the log probability of the previous state is
+        # more than -100. Remember scailing to 1e100 exists
+        if (trellis[state,1]>-100)
+          # Calculate transition probability based on time difference
+          # and previous state
+          p_transition,v_transition = transition_logdistribution(state,
+                                                                  velocity[state,:,1],
+                                                                  spaceInfo,
+                                                                  signals[i+1].dt)
 
           if testing
             if state == ipu[i]
-              print("Maximum location proability on the next step is at ", fold_index(indmax(combine_logprob(p_rssi,p_transition)),spaceInfo), " and ", fold_index(ipu[i+1],spaceInfo), " is expected\n")
-              # print("Maximum of transition is expected at ", fold_index(indmax(p_transition[:]),spaceInfo), "  and ", )
-              # print("Transition velosity is ", v_transition[convert(Int64,ipu[i+1]),:], " and ", " is expected\n")
+              print("Maximum location proability on the next step is at ",
+                    fold_index(indmax(combine_logprob(p_rssi,p_transition)),spaceInfo),
+                    " and ",
+                    fold_index(ipu[i+1],spaceInfo),
+                    " is expected\n")
             end
           end
 
-          # print("Comb prob\n")
           cp = combine_logprob(p_rssi,p_transition)
-          # print("Comb trel\n")
-          trellis[:,2],velocity[:,:,2],path_back[:,i+1] = combine_trellis(trellis[:,2],velocity[:,:,2],cp+trellis[state,1],v_transition,path_back[:,i+1],state)
+
+          # slicing creates new arrays -> performance issue
+          trellis[:,2],velocity[:,:,2],path_back[:,i+1] = combine_trellis(trellis[:,2],
+                                                                          velocity[:,:,2],
+                                                                          cp+trellis[state,1],
+                                                                          v_transition,
+                                                                          path_back[:,i+1],
+                                                                          state)
         end
 
       end
@@ -321,26 +378,34 @@ module LocTrack
       # boosting = 1e100
       # boosting_coefficient = boosting/sum(trellis[:,i+1])
       # trellis[:,i+1] = trellis[:,i+1]*boosting_coefficient
-      lpdfmax = maximum(trellis[:,2])
-      trellis[:,2] = trellis[:,2]-lpdfmax
 
+      # find the maximum probability value
+      lpdfmax = maximum(trellis[:,2])
+      # scale log probabilities? slicing creates new arrays -> performance issue
+      trellis[:,2] = trellis[:,2]-lpdfmax
+      # current state probabilities and velocities assigned to the previous
+      # step for the next iteration
       trellis[:,1] = trellis[:,2]
       velocity[:,:,1] = velocity[:,:,2]
-      trellis[:,2] = zeros(Float64,grid_space_size)-1e10
-      velocity[:,:,2] = zeros(Float64,grid_space_size,2)
-      toc()
+      trellis[:,2] = zeros(Float64,grid_space_size)-1e10 # creating new array -> performance issues
+      velocity[:,:,2] = zeros(Float64,grid_space_size,2) # creating new array -> performance issues
+      # toc()
     end
 
+    # Allocate memory for estimated path
     estimated_path = zeros(Float64,length(signals),2)
-
-    # print(trellis,"\n")
+    # Find most likely path
     step_back = indmax(trellis[:,1])
-    print("Choosen end max is at $(step_back)\n")
+    # print("Choosen end max is at $(step_back)\n")
     # estimated_path[end,:] = grid_to_coordinates(fold_index(location,spaceInfo),spaceInfo.grid_size)
     # step_back = path_back[location,end]
 
+    # Propagate back to find the most likely path
     for step_ind in length(signals):-1:1
-      estimated_path[step_ind,:] = grid_to_coordinates(fold_index(step_back,spaceInfo),spaceInfo.grid_size)
+      estimated_path[step_ind,:] = grid_to_coordinates(
+                                      fold_index(step_back,spaceInfo),
+                                                  spaceInfo.grid_size
+                                      )
       step_back = path_back[step_back,step_ind]
     end
 

@@ -1,3 +1,4 @@
+__precompile__()
 module Geometry
 
   const float_err_marg = 0.001

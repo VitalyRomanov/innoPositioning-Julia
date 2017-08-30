@@ -66,6 +66,7 @@ end
 
 # params = CoverageMapProject.fit_parameters(proj,1)
 # JLD.save("/home/ltv/Documents/coverage/town/vm.jld","vm",proj.plan.vis_matr)
+# proj.ssms_ready_count = 0
 params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
 CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 # CoverageMapProject.recalculate_coverage_map(proj,1,parameters = params)

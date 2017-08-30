@@ -12,6 +12,8 @@ using HDF5, JLD
 using DataFrames
 using Optim
 
+gr()
+
 
 type Measurement
   loc_id::Int
@@ -37,7 +39,7 @@ type CMProject
   measur_avail::Bool
 
   # Counters
-  ssms_ready_count::Int
+  ssms_ready_count::Int # remove
 
   # Measurements
   measur::Array{Measurement}
@@ -240,19 +242,35 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
   for ap_ind = project.ssms_ready_count+1:length(project.APs)
     AP = project.APs[ap_ind]
 
-    println("Creating visibility index for AP $(ap_ind)")
-    ap_vis = MapPlan.create_ap_visibility(project.plan,AP)
-    # println(ap_vis)
-    println("Creating image tree for AP $(ap_ind)")
-    im_tree = ImageTree.build_image_tree(project.plan,
-                                          AP,
-                                          ap_vis)
-    println("Calculating coverage map for AP $(ap_ind)")
-    ssm = MapBuilder.caclulate_signal_strength_matrix(im_tree,
-                                                      project.plan,
-                                                      parameters)
-    JLD.save("$(project.path_save_data)/ssm_$(ap_ind).jld","ssm",ssm)
-    plot_map(ssm,project,ap_ind)
+    ssm_path = "$(project.path_save_data)/ssm_$(ap_ind).jld"
+    ssm_map_path = "$(project.path_save_data)/map_$(ap_ind)"
+
+    ssm = nothing
+
+    if !isfile(ssm_path)
+      println("Creating visibility index for AP $(ap_ind)")
+      ap_vis = MapPlan.create_ap_visibility(project.plan,AP)
+
+      println("Creating image tree for AP $(ap_ind)")
+      im_tree = ImageTree.build_image_tree(project.plan,
+                                            AP,
+                                            ap_vis)
+      println("Calculating coverage map for AP $(ap_ind)")
+      ssm = MapBuilder.caclulate_signal_strength_matrix(im_tree,
+                                                        project.plan,
+                                                        parameters)
+      JLD.save(ssm_path,"ssm",ssm)
+    end
+
+    println("Coverage map for AP $(ap_ind) is ready")
+
+    if !isfile(ssm_map_path)
+      if ssm==nothing
+        ssm = JLD.load(ssm_path,"ssm")
+      end
+      println("Plotting coverage map for AP $(ap_ind)")
+      plot_map(ssm',project,ap_ind,ssm_map_path)
+    end
     # project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind],
     #                                                                   project.image_trees[ap_ind],
     #                                                                   project.plan,
@@ -290,9 +308,10 @@ function plot_walls!(project::CMProject)
 end
 
 
-function plot_map(ssm,project,map_ind)
+function plot_map(ssm,project,map_ind,filename)
     rssi_min = -100.
     rssi_max = maximum(ssm)
+
 
     # for x = 1:size(ssm,1), y = 1:size(ssm,2)
     #   if ssm[x,y] < rssi_min && ssm[x,y] > -900.
@@ -314,37 +333,40 @@ function plot_map(ssm,project,map_ind)
 
     plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
 
-    savefig("$(project.path_save_data)/map_$(map_ind).png")
+    savefig(filename)
     # savefig("map_.png")
 end
 
 function plot_map(project::CMProject,map_ind)
   ssm = project.ssms[map_ind]'
+  ssm_map_path = "$(project.path_save_data)/map_$(map_ind).png"
 
-  rssi_min = -100.
-  rssi_max = maximum(ssm)
+  plot_map(ssm,project,map_ind,filename)
 
-  # for x = 1:size(ssm,1), y = 1:size(ssm,2)
-  #   if ssm[x,y] < rssi_min && ssm[x,y] > -900.
-  #     rssi_min = ssm[x,y]
-  #   end
-  # end
-
-  println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
-
-  plot(ssm,
-      seriestype=:heatmap,
-      seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),
-      zlims=(rssi_min,rssi_max),
-      legend = false,
-      grid=false,
-      axis=false)
-
-  plot_walls!(project)
-
-  plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
-
-  savefig("$(project.path_save_data)/map_$(map_ind).png")
+  # rssi_min = -100.
+  # rssi_max = maximum(ssm)
+  #
+  # # for x = 1:size(ssm,1), y = 1:size(ssm,2)
+  # #   if ssm[x,y] < rssi_min && ssm[x,y] > -900.
+  # #     rssi_min = ssm[x,y]
+  # #   end
+  # # end
+  #
+  # println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
+  #
+  # plot(ssm,
+  #     seriestype=:heatmap,
+  #     seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),
+  #     zlims=(rssi_min,rssi_max),
+  #     legend = false,
+  #     grid=false,
+  #     axis=false)
+  #
+  # plot_walls!(project)
+  #
+  # plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
+  #
+  # savefig("$(project.path_save_data)/map_$(map_ind).png")
 end
 
 
