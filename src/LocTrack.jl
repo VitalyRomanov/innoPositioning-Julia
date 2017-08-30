@@ -1,8 +1,8 @@
-module LocTrack
+simodule LocTrack
 
   # dt = 1
 
-  const rssi_sigma = 0.01 # rssi noise stdev
+  const rssiSigma = 0.01 # rssi noise stdev
 
   export getSpaceInfo,estimate_path_viterbi,RssiRecord,PModelParam,pmodel_space,path_to_rssi,path_generation
 
@@ -27,21 +27,24 @@ module LocTrack
   ##### Auxiliary functions
 
   # modify in accordance with performance guidelines
-  function normpdf(x,m,s)
-    return exp(-((x-m)./s).^2/2)./(sqrt(2*pi)*s)
-  end
+  # function normpdf(x,m,s)
+  #   return exp(-((x-m)./s).^2/2)./(sqrt(2*pi)*s)
+  # end
+  #
+  # function scaled_normpdf(x::Float64,m::Array{Float64},s::Float64,scale::Float64)
+  #   return exp(scale-((x-m)./s).^2/2)./(2.5066282746310002*s) # sqrt(2*pi)
+  # end
 
-  function scaled_normpdf(x::Float64,m::Array{Float64},s::Float64,scale::Float64)
-    return exp(scale-((x-m)./s).^2/2)./(2.5066282746310002*s) # sqrt(2*pi)
-  end
+  # sqrt(2pi) = 2.5066282746310002
+  lognormpdf(x,m,s)  = @. -((x-m)/s)^2/2-log(2.5066282746310002*s)
 
-  function lognormpdf(x::Float64,m::Array{Float64},s::Float64)
-    return -((x-m)./s).^2/2-log(2.5066282746310002*s) # sqrt(2*pi)
-  end
+  # function lognormpdf(x::Float64,m::Array{Float64},s::Float64)
+  #   return -((x-m)./s).^2/2-log(2.5066282746310002*s) # sqrt(2*pi)
+  # end
 
-  function lognormpdf(x::Array{Float64},m::Float64,s::Float64)
-    return -((x-m)./s).^2/2-log(2.5066282746310002*s) # sqrt(2*pi)
-  end
+  # function lognormpdf(x::Array{Float64},m::Float64,s::Float64)
+  #   return -((x-m)./s).^2/2-log(2.5066282746310002*s) # sqrt(2*pi)
+  # end
 
   function getSpaceInfo(space,grid_size=1.)
     grid = convert(Array{Int},floor(space/grid_size))
@@ -128,45 +131,52 @@ module LocTrack
     return path,signals
   end
 
-  function rssi_distribution(rssi::Float64,signal_map::Array{Float64},spaceInfo::SpaceInfo)
-    dist = scaled_normpdf(rssi,signal_map,.01,100.)
-    return dist#/sum(dist)
+  # function rssi_distribution(rssi::Float64,signal_map::Array{Float64},spaceInfo::SpaceInfo)
+  #   dist = scaled_normpdf(rssi,signal_map,.01,100.)
+  #   return dist#/sum(dist)
+  # end
+
+  function rssiLogDist(rssi::Float64, # current rssi value
+                      signalMap::Array{Float64} # unrolled coverage map
+                      )
+    # use coverage map values as mean, rssi as value and
+    # rssiSigma as stdev for gaussian distribution
+    dist = lognormpdf(rssi,signalMap,rssiSigma)
+    # log probabilities are normalized
+    return dist-maximum(dist)
   end
 
-  function rssi_logdistribution(rssi::Float64,signal_map::Array{Float64},spaceInfo::SpaceInfo)
-    dist = lognormpdf(rssi,signal_map,rssi_sigma)
-    lpdfmax = maximum(dist)
-    return dist-lpdfmax
-  end
+  # function transition_distribution(state,v,spaceInfo,dt = 1.,boosting = 1e100)
+  #   location = grid_to_coordinates(fold_index(state,spaceInfo),spaceInfo.grid_size)
+  #   dx = collect(0:1:(spaceInfo.grid[1]-1))*spaceInfo.grid_size+spaceInfo.grid_size/2
+  #   dy = collect(0:1:(spaceInfo.grid[2]-1))*spaceInfo.grid_size+spaceInfo.grid_size/2
+  #   x = scaled_normpdf(dx,location[1]+v[1]*dt,dt^2/2,50.)
+  #   y = scaled_normpdf(dy,location[2]+v[2]*dt,dt^2/2,50.)'
+  #   map = x*y
+  #   ax = (location[1]+v[1]*dt-dx)*2/dt^2
+  #   ay = (location[2]+v[2]*dt-dy)*2/dt^2
+  #   vx = ones(Float64,spaceInfo.grid[2])*(v[1]+ax*dt)'
+  #   vy = (ones(Float64,spaceInfo.grid[1])*(v[2]+ay*dt)')'
+  #   # check velocity
+  #   boosting_coefficient = boosting/sum(map)
+  #   return map*boosting_coefficient,[vx[:] vy[:]]
+  # end
 
-  function transition_distribution(state,v,spaceInfo,dt = 1.,boosting = 1e100)
-    location = grid_to_coordinates(fold_index(state,spaceInfo),spaceInfo.grid_size)
-    dx = collect(0:1:(spaceInfo.grid[1]-1))*spaceInfo.grid_size+spaceInfo.grid_size/2
-    dy = collect(0:1:(spaceInfo.grid[2]-1))*spaceInfo.grid_size+spaceInfo.grid_size/2
-    x = scaled_normpdf(dx,location[1]+v[1]*dt,dt^2/2,50.)
-    y = scaled_normpdf(dy,location[2]+v[2]*dt,dt^2/2,50.)'
-    map = x*y
-    ax = (location[1]+v[1]*dt-dx)*2/dt^2
-    ay = (location[2]+v[2]*dt-dy)*2/dt^2
-    vx = ones(Float64,spaceInfo.grid[2])*(v[1]+ax*dt)'
-    vy = (ones(Float64,spaceInfo.grid[1])*(v[2]+ay*dt)')'
-    # check velocity
-    boosting_coefficient = boosting/sum(map)
-    return map*boosting_coefficient,[vx[:] vy[:]]
-  end
-
-  function transition_logdistribution(state::Int,v::Array{Float64},spaceInfo::SpaceInfo,dt::Float64)
-    location = grid_to_coordinates(fold_index(state,spaceInfo),spaceInfo.grid_size)
-    dx = collect(0:1:(spaceInfo.grid[1]-1))*spaceInfo.grid_size+spaceInfo.grid_size/2
-    dy = collect(0:1:(spaceInfo.grid[2]-1))*spaceInfo.grid_size+spaceInfo.grid_size/2
+  function transLogDist(state::Int, # previous state. defines mean value
+                        v::Array{Float64}, # velocity defines mean value
+                        si::SpaceInfo,
+                        dt::Float64)
+    location = grid_to_coordinates(fold_index(state,si),si.grid_size)
+    dx = collect(0:1:(si.grid[1]-1))*si.grid_size+si.grid_size/2
+    dy = collect(0:1:(si.grid[2]-1))*si.grid_size+si.grid_size/2
     # need support for rectangular space
     x = lognormpdf(dx,location[1]+v[1]*dt,dt^2/2)
     y = lognormpdf(dy,location[2]+v[2]*dt,dt^2/2)'
     map = (x*ones(Float64,1,length(y)))+(ones(Float64,length(x),1)*y)
     ax = (dx-location[1]-v[1]*dt)*2/dt^2
     ay = (dy-location[2]-v[2]*dt)*2/dt^2
-    vx = (ones(Float64,spaceInfo.grid[2])*(v[1]+ax*dt)')'
-    vy = ones(Float64,spaceInfo.grid[1])*(v[2]+ay*dt)'
+    vx = (ones(Float64,si.grid[2])*(v[1]+ax*dt)')'
+    vy = ones(Float64,si.grid[1])*(v[2]+ay*dt)'
     # check velocity
     lpdfmax = maximum(map)
     return map-lpdfmax,[vx[:] vy[:]]
@@ -181,7 +191,7 @@ module LocTrack
     a1 = zeros(Float64,6,2)
     for i in 1:1:size(path,1)
       index = coordinates_to_grid(path[i,:],spaceInfo.grid_size)
-      rssi[i] = randn()*rssi_sigma+signal_map[index[1],index[2]]
+      rssi[i] = randn()*rssiSigma+signal_map[index[1],index[2]]
       index_path[i,:] = index
       ipu[i] = unfold_index(index,spaceInfo)
 
@@ -293,9 +303,8 @@ module LocTrack
 
     # calculate log distribution. log allows to use sum instead of product
     # This is used to initialize probabilities in trellis
-    p_rssi = rssi_logdistribution(signals[1].rssi,
-                                  signal_map[signals[1].ap],
-                                  spaceInfo) # the value is boosted by exp(100)
+    p_rssi = rssiLogDist(signals[1].rssi,
+                          signal_map[signals[1].ap]) # the value is boosted by exp(100)
 
     # if testing
     #   print("Maximum signal proability is at ",
@@ -325,9 +334,8 @@ module LocTrack
       # println("Step $i, dt = $(signals[i+1].dt)")
 
       # Location probabilities based on rssi
-      p_rssi = rssi_logdistribution(signals[i+1].rssi,
-                                    signal_map[signals[i+1].ap],
-                                    spaceInfo)
+      p_rssi = rssiLogDist(signals[i+1].rssi,
+                            signal_map[signals[i+1].ap])
 
       if testing
         print("Maximum signal proability on the next step is at ",
@@ -346,10 +354,10 @@ module LocTrack
         if (trellis[state,1]>-100)
           # Calculate transition probability based on time difference
           # and previous state
-          p_transition,v_transition = transition_logdistribution(state,
-                                                                  velocity[state,:,1],
-                                                                  spaceInfo,
-                                                                  signals[i+1].dt)
+          p_transition,v_transition = transLogDist(state,
+                                                  velocity[state,:,1],
+                                                  spaceInfo,
+                                                  signals[i+1].dt)
 
           if testing
             if state == ipu[i]
