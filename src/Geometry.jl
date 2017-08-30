@@ -26,22 +26,27 @@ module Geometry
     return MBR(v1,v2)
   end
 
-  function reflection_from_plane(point,plane)
-    # make sure the reflection is on the side of the plane that is closer to the second vertex
-    cp = (dot(point,plane[1:3])+plane[4])/dot(plane[1:3],plane[1:3])
-    # cp = dot([point;1],plane)/norm(plane[1:3])^2
-    return point-2*plane[1:3].*cp
-  end
+  # @views (function reflection_from_plane(point,plane)
+  #   # make sure the reflection is on the side of the plane that is closer to the second vertex
+  #   cp = (dot(point,plane[1:3])+plane[4])/dot(plane[1:3],plane[1:3])
+  #   # cp = dot([point;1],plane)/norm(plane[1:3])^2
+  #   return point-2*plane[1:3].*cp
+  # end)
+  @views (function reflection_from_plane(point,plane)
+    temp = plane[1:3]
+    cp = (dot(point,temp).+plane[4])./norm(temp).^2
+    return point.-2.*temp.*cp
+  end)
 
-  function shrink_line!(line::Line,absolute_shrinkage_value)
+  function shrink_line!(line::Line,asv::Float64)
     eps = line.v2-line.v1
-    if norm(eps)==0
+    lnorm = norm(eps)
+    if lnorm==0
       return line
     end
-    eps = absolute_shrinkage_value*eps/norm(eps)
+    eps = asv*eps/lnorm
     line.v2 -= eps
     line.v1 += eps
-    # return line
   end
 
   function shrink_polygon(pol::Array{Array{Float64}},absolute_shrinkage_value)
@@ -58,7 +63,7 @@ module Geometry
         if denom==0||absolute_shrinkage_value>denom
           return pol
         end
-        eps = absolute_shrinkage_value*eps/denom
+        eps = absolute_shrinkage_value.*eps./denom
         push!(polygon,pol[ind] + eps)
       end
     end
