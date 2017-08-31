@@ -1,4 +1,3 @@
-__precompile__()
 module ImageTree
 
   using Geometry
@@ -67,6 +66,22 @@ module ImageTree
     return feasible_walls
   end
 
+
+  function sanityCheck(image_tree,image_id)
+    # returns false if there are two reflections from the wall with image_id
+    # created to check for multiple reflections from floor (impossible)
+    image = image_tree[image_id]
+    while image.parent!=-1
+      current_wall = image.assigned_wall
+      if current_wall == 1 # 1 is the id of floor
+        return false
+      end
+      image = image_tree[image.parent]
+    end
+    return true
+  end
+
+
   function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,plan::mapPlan,AP_visibility;max_levels = 3, dist_thr = 150)
     # This function calculates the offsprings of a particular image in the image tree.
     # It is crucial to reduce the number of irrelevant images as much a possible. For this reason several optimizations are done.
@@ -86,6 +101,11 @@ module ImageTree
       feasible_walls = get_feasible_walls(image_tree,image,plan,AP_visibility)
 
       for wall in feasible_walls
+        if wall.id == 1
+          if !sanityCheck(image_tree,image_id)
+            continue
+          end
+        end
         position = reflection_from_plane(image.location,wall.plane_eq)
         new_node = ImageTree.treeNode(position,image.level+1,image_id,Array{Int}(0),wall.id,norm(position-image.location)/2)
         real_offsprings += 1

@@ -1,4 +1,3 @@
-__precompile__()
 module MapPlan
   using Geometry
   using MapPrimitives
