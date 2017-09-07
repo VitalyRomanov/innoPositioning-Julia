@@ -1,4 +1,4 @@
-simodule LocTrack
+module LocTrack
 
   # dt = 1
 

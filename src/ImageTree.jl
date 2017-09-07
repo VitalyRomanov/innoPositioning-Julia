@@ -127,6 +127,9 @@ module ImageTree
     root = treeNode(AP,0,-1,[],-1,0.)
     push!(image_tree,root)
 
+    println(plan.vis_matr[:,1])
+    println(plan.vis_matr[1,:])
+
     tree_position = 1
     iteration_steps = length(image_tree)
 

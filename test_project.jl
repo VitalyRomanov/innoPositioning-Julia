@@ -26,21 +26,21 @@ while !(resp in 1:options)
     print("\t3 - load last project\n")
   end
   print("Enter option: ")
-  # resp = 3
-  resp = parse(Int,readline())
+  resp = 1
+  # resp = parse(Int,readline())
 end
 
 
 if resp==1
-  print("Enter new project name: ")
-  name = readline()[1:end-1]
-  print("Enter path for initial data: ")
-  load_path = strip(readline())
-  print("Enter saving location: ")
-  save_path = strip(readline())
-  # name = "town2"
-  # load_path = "/home/ltv/Dropbox/work/coverage/town"
-  # save_path = "/home/ltv/Dropbox/work/coverage/town"
+  # print("Enter new project name: ")
+  # name = readline()[1:end-1]
+  # print("Enter path for initial data: ")
+  # load_path = strip(readline())
+  # print("Enter saving location: ")
+  # save_path = strip(readline())
+  name = "6floor"
+  load_path = "/home/ltv/Documents/coverage/6floor"
+  save_path = "/home/ltv/Documents/coverage/6floor"
   proj = CoverageMapProject.create_project(load_path,save_path,name)
   CoverageMapProject.save_session("$(save_path)/$(name).jld")
   # CoverageMapProject.calculate_image_trees(proj)
@@ -67,8 +67,8 @@ end
 # params = CoverageMapProject.fit_parameters(proj,1)
 # JLD.save("/home/ltv/Documents/coverage/town/vm.jld","vm",proj.plan.vis_matr)
 # proj.ssms_ready_count = 0
-params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
-CoverageMapProject.calculate_coverage_map(proj,parameters = params)
+# params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
+# CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 # CoverageMapProject.recalculate_coverage_map(proj,1,parameters = params)
 # CoverageMapProject.plot_map(proj,1)
 

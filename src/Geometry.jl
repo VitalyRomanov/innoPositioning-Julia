@@ -125,27 +125,27 @@ module Geometry
   end
 
 
-  # function lines_crossed(line1::Line,line2::Line)
-  #   a = line1.v1[2] - line1.v2[2]
-  #   b = line1.v2[1] - line1.v1[1]
-  #   c = (line1.v2[2] - line1.v1[2])*line1.v1[1] - (line1.v2[1] - line1.v1[1])*line1.v1[2]
-  #
-  #   d = line2.v1[2] - line2.v2[2]
-  #   e = line2.v2[1] - line2.v1[1]
-  #   f = (line2.v2[2] - line2.v1[2])*line2.v1[1] - (line2.v2[1] - line2.v1[1])*line2.v1[2]
-  #
-  #   den = (-d*b + a*e)
-  #
-  #   if den == 0
-  #     return false
-  #   end
-  #
-  #   y = (c*d - f*a) / den
-  #   x = (b*f - c*e) / den
-  #
-  #   ip = [x,y]
-  #
-  #   return dot(line1.v1-ip,line1.v2-ip)<=0 && dot(line2.v1-ip,line2.v2-ip)<=0
-  # end
+  function lines_crossed(line1::Line,line2::Line)
+    a = line1.v1[2] - line1.v2[2]
+    b = line1.v2[1] - line1.v1[1]
+    c = (line1.v2[2] - line1.v1[2])*line1.v1[1] - (line1.v2[1] - line1.v1[1])*line1.v1[2]
+
+    d = line2.v1[2] - line2.v2[2]
+    e = line2.v2[1] - line2.v1[1]
+    f = (line2.v2[2] - line2.v1[2])*line2.v1[1] - (line2.v2[1] - line2.v1[1])*line2.v1[2]
+
+    den = (-d*b + a*e)
+
+    if den == 0
+      return false
+    end
+
+    y = (c*d - f*a) / den
+    x = (b*f - c*e) / den
+
+    ip = [x,y]
+
+    return dot(line1.v1-ip,line1.v2-ip)<=0 && dot(line2.v1-ip,line2.v2-ip)<=0
+  end
 
 end

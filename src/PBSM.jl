@@ -35,8 +35,19 @@ end
 
 
 function overlap(mbr1::MBR,mbr2::MBR)
-  return prod(map(x->x<=0,(mbr1.v1-mbr2.v2).*(mbr1.v2-mbr2.v1)))
+  return prod(map(x->x<=0,sign.(mbr1.v1-mbr2.v2).*sign.(mbr1.v2-mbr2.v1)))
 end
+
+# function overlap_line(mbr1::MBR,mbr2::MBR)
+#   # http://www.3dkingdoms.com/weekly/weekly.php?a=3
+#   if (mbr1.v1.<mbr2.v1).*(mbr1.v2.<mbr2.v1) return false end
+#   if (mbr1.v1.>mbr2.v2).*(mbr1.v2.>mbr2.v2) return false end
+#   if (mbr1.v1.>mbr2.v1).*(mbr1.v2.<mbr2.v2) return true end
+#   ray = Line(mbr1.v1,mbr1.v2);plane = zeros{Int}(4,1)
+#
+#   plane[1] = mbr2.v1[1]
+#   if (line_plane_intersection(ray,plane)!=-1) &&
+# end
 
 
 function get_sector_ind(coord::Array{Float64},index::Pbsm)
@@ -213,8 +224,9 @@ function probe(index::Pbsm,obj::MBR)
   # println(sind)
   pairs = Array{Int}(0)
 
-  for sector in index.sectors[sind]
-    for obj_ind in sector.objects
+  # for sector in index.sectors[sind]
+  for sect_id = sind
+    for obj_ind in index.sectors[sect_id].objects
       # println("Try")
       # println(obj)
       # println(index.objects[obj_ind])

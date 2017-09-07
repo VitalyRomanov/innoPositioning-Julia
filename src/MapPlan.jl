@@ -68,42 +68,47 @@ module MapPlan
     return town_plan
   end
 
-  function read_data_2d(data_file)
-    walls = []
-    input = open(data_file)
-    for (line_ind,line) in enumerate(eachline(input))
-      strvec = split(line[1:end-2]," ")
-      v = map(x->parse(Float64,x),strvec)
-      wall = reshape(v[:],2,Int(length(v)/2))'
-      push!(walls,wall)
-    end
-    return walls
+  # function read_data_2d(data_file)
+  #   walls = []
+  #   input = open(data_file)
+  #   for (line_ind,line) in enumerate(eachline(input))
+  #     strvec = split(line[1:end-2]," ")
+  #     v = map(x->parse(Float64,x),strvec)
+  #     wall = reshape(v[:],2,Int(length(v)/2))'
+  #     push!(walls,wall)
+  #   end
+  #   return walls
+  # end
+
+
+  # function create_all_vertex_paths(polygon1::Array{Array{Float64}},polygon2::Array{Array{Float64}})
+  #   paths = Array{Line}(length(polygon1)*length(polygon2))
+  #   path_counter = 1
+  #   for i = 1:length(polygon1)
+  #     for j = 1:length(polygon2)
+  #       paths[path_counter] = Line(polygon1[i],polygon2[j])
+  #       path_counter += 1
+  #     end
+  #   end
+  #   return paths
+  # end
+
+
+  function centerDistance(pol1,pol2)
+    # calculate the centers of two polygons and find the distance between them
+    c1 = sum(pol1)/length(pol1)
+    c2 = sum(pol2)/length(pol2)
+    return norm(c1-c2)
   end
 
 
-  function create_all_vertex_paths(polygon1::Array{Array{Float64}},polygon2::Array{Array{Float64}})
-    paths = Array{Line}(length(polygon1)*length(polygon2))
-    path_counter = 1
-    for i = 1:length(polygon1)
-      for j = 1:length(polygon2)
-        paths[path_counter] = Line(polygon1[i],polygon2[j])
-        path_counter += 1
-      end
-    end
-    return paths
-  end
-
-
-
-  function shortest_polygon_distance(polygon1::Array{Array{Float64}},polygon2::Array{Array{Float64}})
+  function shortestPolygonDistance(pol1,pol2)
+    # iterate over all possible pairs of polygon vertex and find the minimal
+    # distance
     min_dist  = 1.e50
-
-    for i = 1:length(polygon1)
-      for j = 1:length(polygon2)
-        min_dist = min(min_dist,norm(polygon1[i]-polygon2[j]))
-      end
+    for i = 1:length(pol1),j = 1:length(pol2)
+        min_dist = min(min_dist,norm(pol1[i]-pol2[j]))
     end
-
     return min_dist
   end
 
@@ -115,7 +120,7 @@ module MapPlan
     for (couple_ind,couple_wall) in enumerate(plan.walls)
       shrkd_wll_plgn2 = shrink_polygon(couple_wall.polygon,.2)
 
-      if shortest_polygon_distance(ap_list,shrkd_wll_plgn2) > 200.
+      if centerDistance(ap_list,shrkd_wll_plgn2) > 200.
         continue
       end
 
@@ -143,53 +148,44 @@ module MapPlan
   end
 
 
+  function checkPolygonVisibility(pol1,pol2,plan,filter)
+    for v1 = pol1, v2 = pol2
+      if no_walls_on_path(Line(v1,v2),
+                          plan,
+                          filter)
+        return true
+      end
+    end
+    return false
+  end
 
   function create_wall_visibility_matrix(plan::mapPlan)
-    function initfc(S::SharedArray)
-        for s in eachindex(S)
-            S[s] = false
-        end
-    end
-    visibility_matrix = SharedArray{Bool}((length(plan.walls),length(plan.walls)),init=initfc)
-    # visibility_matrix = Array(Bool,length(plan.walls),length(plan.walls))*false
-    # for (wall_id,wall) in enumerate(plan.walls)
-    @sync @parallel for wall_id = 1:length(plan.walls)
+    now = length(plan.walls)
+    visibility_matrix = SharedArray{Bool}((now,now))*false
+
+    @sync @parallel for wall_id = 1:now
       print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
       wall = plan.walls[wall_id]
-      shrkd_wll_plgn1 = shrink_polygon(wall.polygon,.2)
-      for (couple_ind,couple_wall) in enumerate(plan.walls[wall_id+1:end])
 
-        shrkd_wll_plgn2 = shrink_polygon(couple_wall.polygon,.2)
+      filter = Array{Int}(2);
 
-        if shortest_polygon_distance(shrkd_wll_plgn1,shrkd_wll_plgn2) > 200.
-          continue
-        end
+      @time for couple_ind = (wall_id+1):now
+        couple_wall = plan.walls[couple_ind]
 
-        test_path = Line(); result = false
-        for v1 in shrkd_wll_plgn1, v2 in shrkd_wll_plgn2
-          test_path.v1 = v1; test_path.v2 = v2;
-          if no_walls_on_path(test_path,plan)
-            result = true
-            break
-          end
-        end
+        result = false
+        filter[1] = wall.id; filter[2] = couple_wall.id;
 
+        result = checkPolygonVisibility(wall.polygon,
+                                        couple_wall.polygon,
+                                        plan,
+                                        filter)
 
-        # paths = create_all_vertex_paths(shrkd_wll_plgn1,shrkd_wll_plgn2)
-        #
-        # result = false
-        # for path in paths
-        #   if no_walls_on_path(path,plan)
-        #     result = true
-        #     break
-        #   end
-        # end
-        visibility_matrix[wall_id,wall_id+couple_ind] = result
+        visibility_matrix[wall_id,couple_ind] = result
       end
     end
 
-    for i in 1:size(visibility_matrix,1)
-      for j in i+1:size(visibility_matrix,1)
+    for i = 1:now
+      for j = (i+1):now
         visibility_matrix[j,i] = visibility_matrix[i,j]
       end
       visibility_matrix[i,i] = false
@@ -198,6 +194,20 @@ module MapPlan
     print("\n")
 
     return convert(Array,visibility_matrix)
+  end
+
+
+  function no_walls_on_path(path::Line,plan::mapPlan,filter)
+    shrink_line!(path,float_err_marg)
+    for wall_id = query_walls(path,plan.index)
+      if MapPrimitives.get_intersection_point(path,plan.walls[wall_id])!=-1
+        if wall_id in filter
+          continue
+        end
+        return false
+      end
+    end
+    return true
   end
 
 
