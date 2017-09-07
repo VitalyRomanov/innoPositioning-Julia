@@ -40,10 +40,10 @@ if resp==1
   # print("Enter saving location: ")
   # save_path = strip(readline())
   name = "6floor"
-  load_path = "/Users/LTV/Documents/coverage/6floor"
-  save_path = "/Users/LTV/Documents/coverage/6floor"
-  # load_path = "/home/ltv/Documents/coverage/6floor"
-  # save_path = "/home/ltv/Documents/coverage/6floor"
+  # load_path = "/Users/LTV/Documents/coverage/6floor"
+  # save_path = "/Users/LTV/Documents/coverage/6floor"
+  load_path = "/home/ltv/Documents/coverage/6floor"
+  save_path = "/home/ltv/Documents/coverage/6floor"
   proj = CoverageMapProject.create_project(load_path,
                             save_path,
                             name,

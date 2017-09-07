@@ -89,16 +89,18 @@ module MapBuilder
     # add support for multiple resolutions
     size1 = plan.limits[1,2]-plan.limits[1,1];
     size2 = plan.limits[2,2]-plan.limits[2,1];
-    ss = SharedArray{Float64}(size1,size2)
+    # ss = SharedArray{Float64}(size1,size2)
+    ss = Array{Float64}(size1,size2)
     for x = 1:size1
-      @sync @parallel for y = 1:size2
+      # @sync @parallel for y = 1:size2
+      for y = 1:size2
         # incorporate cell size of type Float64
         x_loc = Float64(x + plan.limits[1,1]) # multiply by cell size
         y_loc = Float64(y + plan.limits[2,1]) # multiply by cell size
         ss[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan,parameters)
-        # print("\r$(x)/$(size(ssm,1)) $(y)/$(size(ssm,2))      ")
+        print("\r$(x)/$(size1) $(y)/$(size2)      ")
       end
-      print("\r$(x)/$(size1)       ")
+      # print("\r$(x)/$(size1)       ")
     end
     print("\n")
     return convert(Array{Float64},ss)
@@ -132,46 +134,49 @@ module MapBuilder
                                     image_tree::Array{treeNode},
                                     plan::mapPlan,
                                     parameters::Array{Float64};
-                                    pldthr = 200.)
+                                    pldthr = 150.)
 
     # distance = Array(Float64,0)
     # reflections = Array(Int,0)
     # intersections = Array(Float64,0)
-    path_loss = Array{Float64}(0)
+    # path_loss = Array{Float64}(0)
+    path_loss = SharedArray{Float64}(length(image_tree),1)*0.
 
     used_images = 0
 
     equation_line = [1. 1 1 1 0 0 0]
 
-    for (node_ind,image) in enumerate(image_tree)
+    @sync @parallel for image_id = 1:length(image_tree)
       # !!!!!!!!!!!!!! the following conditions is suspected to be wrong
-      if norm(image.location - Rx) > pldthr
-          continue
+      image = image_tree[image_id]
+      if norm(image.location - Rx) < pldthr
+
+        dist,nrw,wop = get_path_info(image_tree,image_id,Rx,plan)
+        # print(dist," ",nrw," ",wop)
+
+        #   this is intended to skip paths that go through walls
+        if wop!=0 && dist!=-1.
+          # print(" Trying...")
+          used_images += 1
+          # push!(distance,dist)
+          # push!(reflections,nrw)
+          # push!(intersections,wop)
+          equation_line[5] = log10(dist)
+          equation_line[6] = nrw
+          equation_line[7] = wop
+
+          pl = 10 ^ ( sum(equation_line*parameters) / 10. )
+          # pl = 10 ^ ( sum([1 1 1 1 log10(dist) nrw wop]*parameters) / 10. )
+          # pl = 10^( ( P0 - (10*ae*log10(dist)+20*log10(2.4e9) - 147.55 + sc*rc*nrw + tc*wop)) /10.)
+          # push!(path_loss,pl)
+          path_loss[image_id] = pl
+        end
       end
-
-      dist,nrw,wop = get_path_info(image_tree,node_ind,Rx,plan)
-
-    #   this is intended to skip paths that go through walls
-      if wop>0
-         continue
-      end
-
-      if dist!=-1.
-        used_images += 1
-        # push!(distance,dist)
-        # push!(reflections,nrw)
-        # push!(intersections,wop)
-        equation_line[5] = log10(dist)
-        equation_line[6] = nrw
-        equation_line[7] = wop
-
-        pl = 10 ^ ( sum(equation_line*parameters) / 10. )
-        # pl = 10 ^ ( sum([1 1 1 1 log10(dist) nrw wop]*parameters) / 10. )
-        # pl = 10^( ( P0 - (10*ae*log10(dist)+20*log10(2.4e9) - 147.55 + sc*rc*nrw + tc*wop)) /10.)
-        push!(path_loss,pl)
-      end
+      # print("\n")
 
     end
+
+    # println(path_loss)
 
     # println("$(used_images/length(image_tree)) images used")
 
