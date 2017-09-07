@@ -8,10 +8,31 @@ module MapPrimitives
   type Wall3D
     id::Int
     polygon::Array{Array{Float64}}
+    special::Bool
     plane_eq::Array{Float64}
+    width::Float64
+
   end
 
-  Wall3D(id,polygon) = Wall3D(id,polygon,get_plane_equation(polygon))
+  # Wall3D initializer
+  # id: unique wall id
+  # pol: polygon that represents vertexes of a wall
+  Wall3D(id,pol) = Wall3D(id,
+                        pol,
+                        isSpecial(pol),         # true for floor&ceil
+                        get_plane_equation(pol),
+                        getWidth(pol))          # filter narrow walls
+
+
+  @inline function getWidth(pol)
+    #   returns the width of a wall in XY projection
+      return norm(pol[1][1:2]-pol[4][1:2])
+  end
+
+  @inline function isSpecial(pol)
+    #   returns true when the wall is collinear with Z plane
+      return pol[1][3]==pol[2][3]
+  end
 
   # type Point
   #   val::Array{Float64}

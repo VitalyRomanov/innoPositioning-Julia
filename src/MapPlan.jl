@@ -1,30 +1,52 @@
 module MapPlan
   using Geometry
   using MapPrimitives
-  # using RadixTree
   using PBSM
 
   export mapPlan
-  export read_data,plot_walls,downsample_maps,no_walls_on_path,walls_on_path
+  export read_data,downsample_maps,no_walls_on_path,walls_on_path
 
   mutable struct mapPlan
     walls::Array{Wall3D}
-    # AP::Array{Float64}
     limits::Array{Int}
-    # index::RadixTree.radixTree
     index::PBSM.Pbsm
     vis_matr::Array{Bool}
   end
 
+
   function query_walls(path::Line,wall_index)
-    # return RadixTree.probe(wall_index,line2mbr(path))
     return PBSM.probe(wall_index,line2mbr(path))
   end
 
-  function create_index(walls,lims,grid_scl = 10.)
-    # return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
+  function create_index(walls,lims;grid_scl = 10.)
     return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims,grd_scl = grid_scl)
   end
+
+
+  # function visualizeWallVis(project, range = [])
+  #     if range == []
+  #         range = 1:length(plan.walls)
+  #     end
+  #
+  #     wallVisOutPath = project.path_save_data+"/wall_Vis/"
+  #
+  #     if !isdir(wallVisOutPath)
+  #         mkdir(wallVisOutPath)
+  #     end
+  #
+  #     plot()
+  #
+  #     for wall_id = range
+  #         plot_walls!(project)
+  #         plot_walls!(project,
+  #                   ids = find(project.plan.vis_matr[wall_id,:]),
+  #                   col = :red)
+  #         plot_walls!(project,
+  #                   ids = [wall_id]),
+  #                   col = :green)
+  #         savefig(wallVisOutPath+"wall_$(wall_id).svg")
+  #     end
+  # end
 
 
 
@@ -50,23 +72,45 @@ module MapPlan
     return new_map
   end
 
-  function plot_walls_2d(walls,x_max,y_max)
-    gr()
-    town_plan = plot([0,0],[0,0],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-    for wall in walls
-      plot!(wall[:,1],wall[:,2],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-    end
-    return town_plan
-  end
+  # function plot_walls_2d(walls,x_max,y_max)
+  #   gr()
+  #   town_plan = plot([0,0],[0,0],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
+  #   for wall in walls
+  #     plot!(wall[:,1],wall[:,2],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
+  #   end
+  #   return town_plan
+  # end
 
-  function plot_walls(walls,x_max,y_max)
-    gr()
-    town_plan = plot([0,0],[0,0],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-    for wall in walls
-      plot!([wall.points[1].val[1],wall.points[4].val[1]],[wall.points[1].val[2],wall.points[4].val[2]],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-    end
-    return town_plan
-  end
+  # function plot_walls(walls,x_max,y_max;ids = [],col = :black)
+  #   gr()
+  #   if ids = []
+  #       ids = 1:length(walls)
+  #   end
+  #   town_plan = plot([0,0],[0,0],linecolor = col,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
+  #   for wall in walls[ids]
+  #     plot!([wall.points[1].val[1],wall.points[4].val[1]],[wall.points[1].val[2],wall.points[4].val[2]],linecolor = col,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
+  #   end
+  #   return town_plan
+  # end
+
+  # function plot_walls!(project; ids = [], col = :black)
+  #   if ids == []
+  #       ids = 1:length(project.plan.walls)
+  #   end
+  #
+  #   for wall in project.plan.walls[ids]
+  #     if wall.polygon[1][3]==wall.polygon[3][3]
+  #       continue
+  #     end
+  #     xs = [wall.polygon[1][1],wall.polygon[4][1]]
+  #     ys = [wall.polygon[1][2],wall.polygon[4][2]]
+  #     plot!(xs,ys,
+  #         linecolor=col,
+  #         xlims = project.plan.limits[1,:],
+  #         ylims = project.plan.limits[2,:],
+  #         legend = false)
+  #   end
+  # end
 
   # function read_data_2d(data_file)
   #   walls = []
@@ -101,6 +145,10 @@ module MapPlan
     return norm(c1-c2)
   end
 
+  function polygonCenter(pol)
+      return sum(pol)/length(pol)
+  end
+
 
   function shortestPolygonDistance(pol1,pol2)
     # iterate over all possible pairs of polygon vertex and find the minimal
@@ -113,7 +161,9 @@ module MapPlan
   end
 
 
-  function create_ap_visibility(plan::mapPlan,AP)
+  function apVisibIndex(plan::mapPlan,AP)
+    # Creates a vector of bool that indicates that corresponding wall is visible
+    # from the standpoint of an AP
     ap_visibility = Array{Bool}(length(plan.walls))*false
     ap_list = push!(Array{Array{Float64}}(0),AP)
 
@@ -149,6 +199,8 @@ module MapPlan
 
 
   function checkPolygonVisibility(pol1,pol2,plan,filter)::Bool
+    # Return true if there is a LOS between some vertex of two polygons
+    # there is a possibility to make this function concurrent
     for v1 = pol1, v2 = pol2
       if no_walls_on_path(Line(v1,v2),
                           plan,
@@ -159,41 +211,55 @@ module MapPlan
     return false
   end
 
-  function create_wall_visibility_matrix(plan::mapPlan)::Array{Bool}
+  function wallVisIndex(plan::mapPlan)::Array{Bool}
+    # creates a matrix of Bool that indictes visivility of a particular wall
+    # from the standpoint of another wall
     now = length(plan.walls)
-    visibility_matrix = SharedArray{Bool}((now,now))*false
+    vis_matr = Array{Bool}((now,now))*false
 
-    @sync @parallel for wall_id = 1:now
+    for wall_id = 1:now
       print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
-      wall = plan.walls[wall_id]
-
-      filter = Array{Int}(2);
-
-      @time for couple_ind = (wall_id+1):now
-        couple_wall = plan.walls[couple_ind]
-
-        result = false
-        filter[1] = wall.id; filter[2] = couple_wall.id;
-
-        result = checkPolygonVisibility(wall.polygon,
-                                        couple_wall.polygon,
-                                        plan,
-                                        filter)
-
-        visibility_matrix[wall_id,couple_ind] = result
+      if plan.walls[wall_id].special
+          # if wall is special fill corresponding row with true
+          # println("Wall $(wall_id) is special")
+          for couple_id = 1:now
+              vis_matr[couple_id,wall_id] = true
+          end
+      else
+          # otherwise check visibility
+          # Shring walls to prevent false paths in corners.
+          wall1 = shrink_polygon(plan.walls[wall_id].polygon,0.8)
+          # this visibility check analyzes corners only. To add visibility for long
+          # walls add center of the wall to the analysis
+          push!(wall1,polygonCenter(wall1))
+          # Filter target walls from the query
+          filter = Array{Int}(2);
+          # Test against walls that are above matrix diagonal.
+          for couple_id = (wall_id+1):now
+            wall2 = shrink_polygon(plan.walls[couple_id].polygon,0.8)
+            push!(wall2,polygonCenter(wall2))
+            # Update filter values here to reduce memory usage
+            filter[1] = wall_id; filter[2] = couple_id;
+            result = checkPolygonVisibility(wall1,
+                                            wall2,
+                                            plan,
+                                            filter)
+            vis_matr[wall_id,couple_id] = result
+        end
       end
     end
 
     for i = 1:now
       for j = (i+1):now
-        visibility_matrix[j,i] = visibility_matrix[i,j]
+        vis_matr[j,i] = vis_matr[i,j]
       end
-      visibility_matrix[i,i] = false
+      # the wall should not be visible from its own standpoint
+      vis_matr[i,i] = false
     end
 
     print("\n")
 
-    return convert(Array,visibility_matrix)
+    return vis_matr
   end
 
 

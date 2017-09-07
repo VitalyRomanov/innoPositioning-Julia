@@ -5,7 +5,7 @@ module ImageTree
   using MapPlan
 
 
-  export treeNode,calculate_offsprings,build_image_tree
+  export treeNode,calcu_offsprings,buildImageTree
   type treeNode
     location::Array{Float64}
     level::Int
@@ -17,13 +17,14 @@ module ImageTree
 
 
   function walls_on_the_same_side(walls, ref_wall_point, refl_wall)
-
+    # returns walls that are that are on the same side from refleciton wall as
+    # the parent wall
     temp = normal_directed_towards_point(ref_wall_point,refl_wall)
-    correct_side = map(x->(temp==normal_directed_towards_point(wall_center(x),refl_wall)),walls)
+    correct_side = map(x->(temp==normal_directed_towards_point(getWallCenter(x),refl_wall)),walls)
     return walls[find(correct_side)]
   end
 
-  function wall_center(wall::Wall3D)
+  function getWallCenter(wall::Wall3D)
     center = 0
     for v in wall.polygon
       center += v
@@ -32,16 +33,38 @@ module ImageTree
     return center
   end
 
+  function getPrevWallCenter(image_tree,image_id,plan)
+    # Get the center of a previous a parent wall. If previous wall is special,
+    # go one level deeper. If the parent is the root image, return it's location
+    center = image_tree[image_id].location
+
+    dive = true
+    while dive
+        wall_id = image_tree[image_id].assigned_wall
+        if wall_id != -1
+            if !plan.walls[wall_id].special
+                center = getWallCenter(plan.walls[wall_id])
+                dive = false
+            end
+            image_id = image_tree[image_id].parent
+        else
+            center = image_tree[image_id].location
+            dive = false
+        end
+    end
+    return center
+  end
+
   function point_on_wall(wall::Wall3D)
     return wall.polygon[1]
   end
 
 
-  function get_feasible_walls(image_tree,image,plan,AP_visibility)
+  function getFeasibleWalls(image_tree,image,plan,apVis)
     if image.assigned_wall == -1
         # when considering wall visibility from the position of AP
         # we can instantly decide what is visible
-      feasible_walls = plan.walls[find(AP_visibility)]
+      feasible_walls = plan.walls[find(apVis)]
     else
         # otherwise we need to use two step filtering
         # first we find walls that are visible from the posiotion of reflection
@@ -67,13 +90,12 @@ module ImageTree
   end
 
 
-  function sanityCheck(image_tree,image_id)
-    # returns false if there are two reflections from the wall with image_id
-    # created to check for multiple reflections from floor (impossible)
+  function sanityCheck(image_tree,image_id,plan)
+    # returns false if there are two reflections from special walls
+    # created to check for multiple reflections from floor or ceiling
     image = image_tree[image_id]
     while image.parent!=-1
-      current_wall = image.assigned_wall
-      if current_wall == 1 # 1 is the id of floor
+      if plan.walls[image.assigned_wall].special
         return false
       end
       image = image_tree[image.parent]
@@ -82,12 +104,22 @@ module ImageTree
   end
 
 
-  function calculate_offsprings(image_tree::Array{treeNode},image_id::Int,plan::mapPlan,AP_visibility;max_levels = 3, dist_thr = 150)
-    # This function calculates the offsprings of a particular image in the image tree.
-    # It is crucial to reduce the number of irrelevant images as much a possible. For this reason several optimizations are done.
-    # 1. If the node is the root node, the walls are checked for being visible from the standpoint of the access point.
-    # 2. Otherwise visibility matrix is used to determine whether the wall is visible from the standpoint of reflection wall
-    # 3. The images should be built only for walls that are on the same side as the previous secondary source
+  function getOffsprings(image_tree::Array{treeNode},   # tree
+                        image_id::Int,                  # current parent node id
+                        plan::mapPlan,                  # plan
+                        apVis;                          # visibility vector
+                        max_levels = 3,                 # do not create new levels beyond that
+                        dist_thr = 40.)                 # max dist between walls with conceq reflections
+    # This function calculates the offsprings of a particular image in the
+    # image tree.
+    # It is crucial to reduce the number of irrelevant images as much a
+    # possible. For this reason several optimizations are done.
+    # 1. If the node is the root node, the walls are checked for being visible
+    #   from the standpoint of the access point.
+    # 2. Otherwise visibility matrix is used to determine whether the wall is
+    #   visible from the standpoint of reflection wall
+    # 3. The images should be built only for walls that are on the same side
+    #   as the previous secondary source
     tree_size = length(image_tree)
     offsprings = Array{treeNode}(length(plan.walls))
     children = Array{Int}(length(plan.walls))
@@ -97,14 +129,21 @@ module ImageTree
     image = image_tree[image_id]
 
     if image.level < max_levels
-      # if the image is the root image no prior knowledge of wall visibility is available
-      feasible_walls = get_feasible_walls(image_tree,image,plan,AP_visibility)
+      # if the image is the root image no prior knowledge of wall visibility
+      # is available
+      feasible_walls = getFeasibleWalls(image_tree,image,plan,apVis)
 
       for wall in feasible_walls
-        if wall.id == 1
-          if !sanityCheck(image_tree,image_id)
+        # get distance
+        if image.assigned_wall != -1
+            # distBetwWalls = norm(getWallCenter(wall)-getWallCenter(plan.walls[image.assigned_wall]))
+            distBetwWalls = norm(getWallCenter(wall)-getPrevWallCenter(image_tree,image_id,plan))
+            if (!wall.special)&&(distBetwWalls>dist_thr/image.level)
+                continue
+            end
+        end
+        if (wall.special)&&(!sanityCheck(image_tree,image_id,plan))
             continue
-          end
         end
         position = reflection_from_plane(image.location,wall.plane_eq)
         new_node = ImageTree.treeNode(position,image.level+1,image_id,Array{Int}(0),wall.id,norm(position-image.location)/2)
@@ -121,21 +160,32 @@ module ImageTree
 
 
 
-  function build_image_tree(plan::mapPlan,AP::Array{Float64},AP_visibility; pl_thr_dist = 180.)
+  function buildImageTree(plan::mapPlan,AP::Array{Float64},apVis; pl_thr_dist = 100.)
+    # this function creates an image tree
+    # plan:
+    # AP: location of the current AP
+    # apVis: elements of this vector indicate whether walls are visible form the
+    # standpoint of this AP
+    # pl_thr_dist: distance between images after which the signal if too week
+    # Array for storing tree node
     image_tree = Array{treeNode}(0)
 
     root = treeNode(AP,0,-1,[],-1,0.)
     push!(image_tree,root)
 
-    println(plan.vis_matr[:,1])
-    println(plan.vis_matr[1,:])
+    # println(plan.vis_matr[:,1])
+    # println(plan.vis_matr[1,:])
 
-    tree_position = 1
-    iteration_steps = length(image_tree)
-
+    # Prepare to populate the tree
+    tree_position = 1; iteration_steps = length(image_tree);
+    # While new nodes can be inserted, continue
     while tree_position <= iteration_steps
+      # Stop if the lower bound distance between images is too large
       if image_tree[tree_position].lb_dist < pl_thr_dist
-        offsprings = calculate_offsprings(image_tree,tree_position,plan,AP_visibility,dist_thr = pl_thr_dist)
+        offsprings = getOffsprings(image_tree,
+                                        tree_position,
+                                        plan,
+                                        apVis)
         append!(image_tree,offsprings)
         iteration_steps = length(image_tree)
       end

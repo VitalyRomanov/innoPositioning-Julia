@@ -193,7 +193,7 @@ function create_index(objects,lims;grd_scl = 10.)
 
   number_of_sector = prod(grid_size)
 
-  println("Number of secors: $number_of_sector")
+  println("Number of sectors: $number_of_sector")
 
   sectors = Array{Sector}(number_of_sector)
 
@@ -214,18 +214,17 @@ function create_index(objects,lims;grd_scl = 10.)
 end
 
 
-# function obj_sec_coverage(index::Pbsm,obj::MBR)
 
 
 
 function probe(index::Pbsm,obj::MBR)::Array{Int}
 
-  # sind = find_intersected_sectors(obj,index)
+  sind = find_intersected_sectors(obj,index)
   pairs = Array{Int}(0)
 
   # for sector in index.sectors[sind]
-  # for sect_id = sind
-  for sect_id = 1:length(index.sectors)
+  for sect_id = sind
+  # for sect_id = 1:length(index.sectors)
     for obj_ind in index.sectors[sect_id].objects
       if overlap(obj,index.objects[obj_ind])
         push!(pairs,obj_ind)

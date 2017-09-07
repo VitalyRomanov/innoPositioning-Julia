@@ -66,9 +66,9 @@ end
 
 
 
-function create_project(init_path,save_path,name)
+function create_project(init_path,save_path,name;secSize = 30.)
   aps = load_aps("$(init_path)/aps.txt")
-  map_plan = create_map_plan(init_path)
+  map_plan = create_map_plan(init_path,secSize = secSize)
   image_trees = Array{Array{treeNode}}(0)
   AP_visibilities = Array{Array{Bool}}(0)
   ssms = Array{Array{Float64}}(0)
@@ -112,7 +112,7 @@ end
 
 
 function regenerate_visibility_matrix!(project::CMProject)
-  project.plan.vis_matr = MapPlan.create_wall_visibility_matrix(project.plan)
+  project.plan.vis_matr = MapPlan.wallVisIndex(project.plan)
 end
 
 
@@ -143,22 +143,20 @@ function load_project(path)
   return CMProject(path_init_data,path_save_data,project_name,APs,AP_visibilities,plan,image_trees,ssms,image_trees_ready,coverage_maps_ready,measur_avail,ssms_ready_count,measur)
 end
 
-function create_map_plan(init_path)
+function create_map_plan(init_path;secSize = 30.)
   walls,lims = load_walls3D("$(init_path)/walls.txt")
 
   # index = RadixTree.create_index(RadixTree.obj2mbr(walls,wall2mbr),lims)
-  index = MapPlan.create_index(walls,lims,30.)
+  index = MapPlan.create_index(walls,lims,grid_scl = secSize)
 
   plan = MapPlan.mapPlan(walls,lims,index,Array{Bool}(0))
 
   if !isfile("$(init_path)/vm.jld")
-    vis_matr = MapPlan.create_wall_visibility_matrix(plan)
+    vis_matr = MapPlan.wallVisIndex(plan)
     JLD.save("$(init_path)/vm.jld","vm",vis_matr)
   else
     vis_matr = JLD.load("$(init_path)/vm.jld","vm")
   end
-
-  # Profile.print(combine = true,sortedby=:count)
 
   plan.vis_matr = vis_matr
 
@@ -190,7 +188,7 @@ function load_walls3D(data_file)
     v = map(x->parse(Float64,x),strvec)
 
     polygon = Array{Array{Float64}}(0)
-    coords = reshape(v[:],3,4)
+    coords = reshape(v[1:12],3,4)
     for i=1:size(coords,2)
       push!(polygon,coords[:,i])
     end
@@ -212,28 +210,21 @@ end
 
 
 
-# function calculate_image_tree(project::CMProject,AP)
-#     ap_vis = MapPlan.create_ap_visibility(project.plan,AP);
-#     im_tree = ImageTree.build_image_tree(project.plan,
-#                                         AP,
-#                                         ap_vis)
 
 
-
-
-function calculate_image_trees(project::CMProject)
-  if project.image_trees_ready
-    println("Image trees ready")
-  else
-    for (ap_ind,AP) in enumerate(project.APs)
-      push!(project.AP_visibilities,MapPlan.create_ap_visibility(project.plan,AP))
-      push!(project.image_trees,ImageTree.build_image_tree(project.plan,AP,project.AP_visibilities[ap_ind]))
-      save_proj(project)
-    end
-    project.image_trees_ready = true
-    save_proj(project)
-  end
-end
+# function calculate_image_trees(project::CMProject)
+#   if project.image_trees_ready
+#     println("Image trees ready")
+#   else
+#     for (ap_ind,AP) in enumerate(project.APs)
+#       push!(project.AP_visibilities,MapPlan.apVisibIndex(project.plan,AP))
+#       push!(project.image_trees,ImageTree.buildImageTree(project.plan,AP,project.AP_visibilities[ap_ind]))
+#       save_proj(project)
+#     end
+#     project.image_trees_ready = true
+#     save_proj(project)
+#   end
+# end
 
 
 function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.])
@@ -252,10 +243,10 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
 
     if !isfile(ssm_path)
       println("Creating visibility index for AP $(ap_ind)")
-      ap_vis = MapPlan.create_ap_visibility(project.plan,AP)
+      ap_vis = MapPlan.apVisibIndex(project.plan,AP)
 
       println("Creating image tree for AP $(ap_ind)")
-      im_tree = ImageTree.build_image_tree(project.plan,
+      im_tree = ImageTree.buildImageTree(project.plan,
                                             AP,
                                             ap_vis)
       println("Calculating coverage map for AP $(ap_ind)")
@@ -294,18 +285,51 @@ function recalculate_coverage_map(project::CMProject,ap_ind;parameters = [147.55
   save_proj(project)
 end
 
+function visualizeWallVis(project, range = [])
+    # if range not specified plot for all walls
+    if range == []
+        range = 1:length(project.plan.walls)
+    end
+    println("Visualizing walls visibility in range ", range)
+    # Path for storing visibility visualizations
+    wallVisOutPath = "$(project.path_save_data)/wall_Vis"
+    # Create a folder to store visualizations
+    if !isdir(wallVisOutPath)
+        mkdir(wallVisOutPath)
+    end
+    # Create figure for every wall in range
+    for wall_id = range
+        print("\rVisualizing visibility for wall $(wall_id).........")
+        plot()
+        plot_walls!(project)
+        plot_walls!(project,
+                  ids = find(project.plan.vis_matr[wall_id,:]),
+                  col = :red,
+                  lw=4)
+        plot_walls!(project,
+                  ids = [wall_id],
+                  col = :green,
+                  lw=4)
+        savefig("$(wallVisOutPath)/wall_$(wall_id).svg")
+    end
+    println("done")
+end
 
-function plot_walls!(project::CMProject)
-  for wall in project.plan.walls
+function plot_walls!(project::CMProject; ids = [], col = :black, lw = 2)
+  if ids == []
+      ids = 1:length(project.plan.walls)
+  end
+  for wall in project.plan.walls[ids]
     if wall.polygon[1][3]==wall.polygon[3][3]
       continue
     end
-    xs = [wall.polygon[1][1],wall.polygon[4][1]]
-    ys = [wall.polygon[1][2],wall.polygon[4][2]]
+    xs = [wall.polygon[1][1],wall.polygon[4][1]]-project.plan.limits[1,1]
+    ys = [wall.polygon[1][2],wall.polygon[4][2]]-project.plan.limits[2,1]
     plot!(xs,ys,
-        linecolor=:black,
-        xlims = project.plan.limits[1,:],
-        ylims = project.plan.limits[2,:],
+        linecolor=col,
+        linewidth=lw,
+        # xlims = project.plan.limits[1,:],
+        # ylims = project.plan.limits[2,:],
         legend = false)
   end
 end
@@ -314,13 +338,6 @@ end
 function plot_map(ssm,project,map_ind,filename)
     rssi_min = -100.
     rssi_max = maximum(ssm)
-
-
-    # for x = 1:size(ssm,1), y = 1:size(ssm,2)
-    #   if ssm[x,y] < rssi_min && ssm[x,y] > -900.
-    #     rssi_min = ssm[x,y]
-    #   end
-    # end
 
     println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
 
@@ -334,7 +351,11 @@ function plot_map(ssm,project,map_ind,filename)
 
     plot_walls!(project)
 
-    plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
+    # Plot the marker for AP location
+    plot!([project.APs[map_ind][1]-project.plan.limits[1,1]],
+        [project.APs[map_ind][2]-project.plan.limits[2,1]],
+        markershape=:diamond,
+        markercolor=:pink)
 
     savefig(filename)
     # savefig("map_.png")
@@ -345,31 +366,6 @@ function plot_map(project::CMProject,map_ind)
   ssm_map_path = "$(project.path_save_data)/map_$(map_ind).png"
 
   plot_map(ssm,project,map_ind,filename)
-
-  # rssi_min = -100.
-  # rssi_max = maximum(ssm)
-  #
-  # # for x = 1:size(ssm,1), y = 1:size(ssm,2)
-  # #   if ssm[x,y] < rssi_min && ssm[x,y] > -900.
-  # #     rssi_min = ssm[x,y]
-  # #   end
-  # # end
-  #
-  # println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
-  #
-  # plot(ssm,
-  #     seriestype=:heatmap,
-  #     seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),
-  #     zlims=(rssi_min,rssi_max),
-  #     legend = false,
-  #     grid=false,
-  #     axis=false)
-  #
-  # plot_walls!(project)
-  #
-  # plot!([project.APs[map_ind][1]],[project.APs[map_ind][2]],markershape=:diamond,markercolor=:pink)
-  #
-  # savefig("$(project.path_save_data)/map_$(map_ind).png")
 end
 
 

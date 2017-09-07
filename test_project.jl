@@ -8,6 +8,7 @@ using CoverageMapProject
 using Plots
 using JLD
 
+sectorSize = 10.
 
 last_session_available = false
 options = 2
@@ -39,9 +40,14 @@ if resp==1
   # print("Enter saving location: ")
   # save_path = strip(readline())
   name = "6floor"
-  load_path = "/home/ltv/Documents/coverage/6floor"
-  save_path = "/home/ltv/Documents/coverage/6floor"
-  proj = CoverageMapProject.create_project(load_path,save_path,name)
+  load_path = "/Users/LTV/Documents/coverage/6floor"
+  save_path = "/Users/LTV/Documents/coverage/6floor"
+  # load_path = "/home/ltv/Documents/coverage/6floor"
+  # save_path = "/home/ltv/Documents/coverage/6floor"
+  proj = CoverageMapProject.create_project(load_path,
+                            save_path,
+                            name,
+                            secSize = sectorSize)
   CoverageMapProject.save_session("$(save_path)/$(name).jld")
   # CoverageMapProject.calculate_image_trees(proj)
 elseif resp==2
@@ -56,12 +62,12 @@ else
   println("Unknown choice")
 end
 
-
+# CoverageMapProject.visualizeWallVis(proj)
 
 # proj.image_trees_ready = false
 # CoverageMapProject.calculate_image_trees(proj)
 
-# CoverageMapProject.calculate_coverage_map(proj)
+CoverageMapProject.calculate_coverage_map(proj)
 # CoverageMapProject.plot_map(proj,1)
 
 # params = CoverageMapProject.fit_parameters(proj,1)
