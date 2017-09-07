@@ -34,7 +34,7 @@ type Pbsm
 end
 
 
-function overlap(mbr1::MBR,mbr2::MBR)
+function overlap(mbr1::MBR,mbr2::MBR)::Bool
   return prod(map(x->x<=0,sign.(mbr1.v1-mbr2.v2).*sign.(mbr1.v2-mbr2.v1)))
 end
 
@@ -116,7 +116,7 @@ function sector_intersected(line::Line,sector::Sector)
   return false
 end
 
-function find_intersected_sectors(object::MBR,index::Pbsm)
+function find_intersected_sectors(object::MBR,index::Pbsm)::Array{Int}
   ind = [coord_to_sec_coord(object.v1,index) coord_to_sec_coord(object.v2,index)]
 
   # println("Object ",object)
@@ -218,20 +218,15 @@ end
 
 
 
-function probe(index::Pbsm,obj::MBR)
+function probe(index::Pbsm,obj::MBR)::Array{Int}
 
-  sind = find_intersected_sectors(obj,index)
-  # println(sind)
+  # sind = find_intersected_sectors(obj,index)
   pairs = Array{Int}(0)
 
   # for sector in index.sectors[sind]
-  for sect_id = sind
+  # for sect_id = sind
+  for sect_id = 1:length(index.sectors)
     for obj_ind in index.sectors[sect_id].objects
-      # println("Try")
-      # println(obj)
-      # println(index.objects[obj_ind])
-      # println()
-
       if overlap(obj,index.objects[obj_ind])
         push!(pairs,obj_ind)
       end

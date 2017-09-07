@@ -153,9 +153,12 @@ function create_map_plan(init_path)
 
   if !isfile("$(init_path)/vm.jld")
     vis_matr = MapPlan.create_wall_visibility_matrix(plan)
+    JLD.save("$(init_path)/vm.jld","vm",vis_matr)
   else
     vis_matr = JLD.load("$(init_path)/vm.jld","vm")
   end
+
+  # Profile.print(combine = true,sortedby=:count)
 
   plan.vis_matr = vis_matr
 

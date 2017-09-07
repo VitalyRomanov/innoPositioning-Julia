@@ -7,7 +7,7 @@ module MapPlan
   export mapPlan
   export read_data,plot_walls,downsample_maps,no_walls_on_path,walls_on_path
 
-  type mapPlan
+  mutable struct mapPlan
     walls::Array{Wall3D}
     # AP::Array{Float64}
     limits::Array{Int}
@@ -148,7 +148,7 @@ module MapPlan
   end
 
 
-  function checkPolygonVisibility(pol1,pol2,plan,filter)
+  function checkPolygonVisibility(pol1,pol2,plan,filter)::Bool
     for v1 = pol1, v2 = pol2
       if no_walls_on_path(Line(v1,v2),
                           plan,
@@ -159,7 +159,7 @@ module MapPlan
     return false
   end
 
-  function create_wall_visibility_matrix(plan::mapPlan)
+  function create_wall_visibility_matrix(plan::mapPlan)::Array{Bool}
     now = length(plan.walls)
     visibility_matrix = SharedArray{Bool}((now,now))*false
 
@@ -197,7 +197,7 @@ module MapPlan
   end
 
 
-  function no_walls_on_path(path::Line,plan::mapPlan,filter)
+  function no_walls_on_path(path::Line,plan::mapPlan,filter)::Bool
     shrink_line!(path,float_err_marg)
     for wall_id = query_walls(path,plan.index)
       if MapPrimitives.get_intersection_point(path,plan.walls[wall_id])!=-1

@@ -80,11 +80,11 @@ module Geometry
 
 
 
-  function get_direction_vector(v1::Array{Float64},v2::Array{Float64})
+  function get_direction_vector(v1::Array{Float64},v2::Array{Float64})::Array{Float64}
     return v2-v1
   end
 
-  @inline function get_direction_vector(line::Line)
+  @inline function get_direction_vector(line::Line)::Array{Float64}
     return line.v2-line.v1
   end
 
