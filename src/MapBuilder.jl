@@ -81,14 +81,39 @@ module MapBuilder
     return vertices
   end
 
+  function dump!(fileobj,d,r,i,x,y)
+    for ind = 1:length(d)
+      if d[ind]!=-1.
+        write(fileobj,"$x $y $(d[ind]) $(r[ind]) $(i[ind])\n")
+      end
+    end
+  end
 
+  function getDumpPos(filePath)
+    dumpfile = open(filePath,"r")
+    lines = readlines(dumpfile)
+    if length(lines)>0
+      x,y = map(x->parse(Float64,x),split(lines[end]," "))[1:2]
+    else
+      x,y = (1,1)
+    end
+    return Int(x+1),Int(y+1)
+  end
 
   function caclulate_signal_strength_matrix(image_tree::Array{treeNode},
                                             plan::mapPlan,
-                                            parameters::Array{Float64})
+                                            parameters::Array{Float64},
+                                            dumpPath)
     # add support for multiple resolutions
-    size1 = plan.limits[1,2]-plan.limits[1,1];
-    size2 = plan.limits[2,2]-plan.limits[2,1];
+    size1 = plan.limits[1,2]-plan.limits[1,1]; size2 = plan.limits[2,2]-plan.limits[2,1];
+    x_start = 1; y_start = 1;
+
+    if isfile(dumpPath)
+      x_start,y_start = getDumpPos(dumpPath)
+    end
+
+    dumpfile = open(dumpPath,"a+")
+
     # ss = SharedArray{Float64}(size1,size2)
     ss = Array{Float64}(size1,size2)
     for x = 1:size1
@@ -97,13 +122,16 @@ module MapBuilder
         # incorporate cell size of type Float64
         x_loc = Float64(x + plan.limits[1,1]) # multiply by cell size
         y_loc = Float64(y + plan.limits[2,1]) # multiply by cell size
-        ss[x,y] = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan,parameters)
-        print("\r$(x)/$(size1) $(y)/$(size2)      ")
+        ss[x,y],d,r,i = calculate_signal_strength([x_loc,y_loc,1],image_tree,plan,parameters)
+        dump!(dumpfile,d,r,i,x,y)
+        print("\r$(x)/$(size1) $(y)/$(size2) $(ss[x,y])      ")
       end
       # print("\r$(x)/$(size1)       ")
+
     end
     print("\n")
-    return convert(Array{Float64},ss)
+    close(dumpfile)
+    return ss
   end
 
 
@@ -136,11 +164,18 @@ module MapBuilder
                                     parameters::Array{Float64};
                                     pldthr = 150.)
 
-    # distance = Array(Float64,0)
-    # reflections = Array(Int,0)
-    # intersections = Array(Float64,0)
-    # path_loss = Array{Float64}(0)
-    path_loss = SharedArray{Float64}(length(image_tree),1)*0.
+    # This function initializes a SharedArray to zero
+    function initfn(S::SharedArray)
+      for i in eachindex(S)
+        S[i] = 0.
+      end
+    end
+
+    # Shared array should be initialized in a "SharedArray way"
+    distan = SharedArray{Float64}(length(image_tree),1, init = initfn)
+    reflec = SharedArray{Float64}(length(image_tree),1, init = initfn)
+    inters = SharedArray{Float64}(length(image_tree),1, init = initfn)
+    path_loss = SharedArray{Float64}(length(image_tree),1, init = initfn)
 
     used_images = 0
 
@@ -152,15 +187,13 @@ module MapBuilder
       if norm(image.location - Rx) < pldthr
 
         dist,nrw,wop = get_path_info(image_tree,image_id,Rx,plan)
-        # print(dist," ",nrw," ",wop)
+        distan[image_id] = dist
+        reflec[image_id] = nrw
+        inters[image_id] = wop
 
         #   this is intended to skip paths that go through walls
-        if wop!=0 && dist!=-1.
-          # print(" Trying...")
+        if wop==0 && dist!=-1.
           used_images += 1
-          # push!(distance,dist)
-          # push!(reflections,nrw)
-          # push!(intersections,wop)
           equation_line[5] = log10(dist)
           equation_line[6] = nrw
           equation_line[7] = wop
@@ -172,13 +205,7 @@ module MapBuilder
           path_loss[image_id] = pl
         end
       end
-      # print("\n")
-
     end
-
-    # println(path_loss)
-
-    # println("$(used_images/length(image_tree)) images used")
 
     pl_sum = sum(path_loss)
     if pl_sum==0
@@ -187,7 +214,7 @@ module MapBuilder
       value = 10*log10(pl_sum)
     end
 
-    return value
+    return value,distan,reflec,inters
   end
 
 

@@ -238,6 +238,7 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
 
     ssm_path = "$(project.path_save_data)/ssm_$(ap_ind).jld"
     ssm_map_path = "$(project.path_save_data)/map_$(ap_ind)"
+    dump_path = "$(project.path_save_data)/ssm_dump_$(ap_ind).txt"
 
     ssm = nothing
 
@@ -252,7 +253,8 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
       println("Calculating coverage map for AP $(ap_ind)")
       ssm = MapBuilder.caclulate_signal_strength_matrix(im_tree,
                                                         project.plan,
-                                                        parameters)
+                                                        parameters,
+                                                        dump_path)
       JLD.save(ssm_path,"ssm",ssm)
     end
 
