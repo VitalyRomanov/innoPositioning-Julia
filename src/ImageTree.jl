@@ -135,6 +135,9 @@ module ImageTree
 
       for wall in feasible_walls
         # get distance
+        if wall.width<1.
+            continue
+        end
         if image.assigned_wall != -1
             # distBetwWalls = norm(getWallCenter(wall)-getWallCenter(plan.walls[image.assigned_wall]))
             distBetwWalls = norm(getWallCenter(wall)-getPrevWallCenter(image_tree,image_id,plan))

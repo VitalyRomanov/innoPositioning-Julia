@@ -214,16 +214,20 @@ module MapPlan
   function wallVisIndex(plan::mapPlan)::Array{Bool}
     # creates a matrix of Bool that indictes visivility of a particular wall
     # from the standpoint of another wall
+    function initfc_bool(s::SharedArray)
+        for i = eachindex(s)
+            s[i] = false
+        end
+    end
     now = length(plan.walls)
-    vis_matr = Array{Bool}((now,now))*false
+    vis_matr = SharedArray{Bool}((now,now),init = initfc_bool)
 
-    for wall_id = 1:now
+    @sync @parallel for wall_id = 1:now
       print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
       if plan.walls[wall_id].special
           # if wall is special fill corresponding row with true
-          # println("Wall $(wall_id) is special")
           for couple_id = 1:now
-              vis_matr[couple_id,wall_id] = true
+            vis_matr[wall_id,1] = true
           end
       else
           # otherwise check visibility
@@ -250,8 +254,15 @@ module MapPlan
     end
 
     for i = 1:now
-      for j = (i+1):now
-        vis_matr[j,i] = vis_matr[i,j]
+      if vis_matr[i,1]
+          for j = 1:now
+            vis_matr[i,j] = true
+            vis_matr[j,i] = true
+          end
+      else
+          for j = (i+1):now
+            vis_matr[j,i] = vis_matr[i,j]
+          end
       end
       # the wall should not be visible from its own standpoint
       vis_matr[i,i] = false

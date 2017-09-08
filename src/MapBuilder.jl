@@ -116,9 +116,9 @@ module MapBuilder
 
     # ss = SharedArray{Float64}(size1,size2)
     ss = Array{Float64}(size1,size2)
-    for x = 1:size1
+    for x = x_start:size1
       # @sync @parallel for y = 1:size2
-      for y = 1:size2
+      for y = y_start:size2
         # incorporate cell size of type Float64
         x_loc = Float64(x + plan.limits[1,1]) # multiply by cell size
         y_loc = Float64(y + plan.limits[2,1]) # multiply by cell size
@@ -127,7 +127,7 @@ module MapBuilder
         print("\r$(x)/$(size1) $(y)/$(size2) $(ss[x,y])      ")
       end
       # print("\r$(x)/$(size1)       ")
-
+      y_start = 1
     end
     print("\n")
     close(dumpfile)
