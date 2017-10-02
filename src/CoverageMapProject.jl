@@ -152,7 +152,7 @@ function create_map_plan(init_path;secSize = 30.)
   plan = MapPlan.mapPlan(walls,lims,index,Array{Bool}(0))
 
   if !isfile("$(init_path)/vm.jld")
-    vis_matr = MapPlan.wallVisIndex(plan)
+    vis_matr = MapPlan.wallVisIndexProj(plan)
     JLD.save("$(init_path)/vm.jld","vm",vis_matr)
   else
     vis_matr = JLD.load("$(init_path)/vm.jld","vm")

@@ -46,6 +46,7 @@ module Geometry
     eps = asv*eps/lnorm
     line.v2 -= eps
     line.v1 += eps
+    return line
   end
 
   function shrink_polygon(pol::Array{Array{Float64}},absolute_shrinkage_value)

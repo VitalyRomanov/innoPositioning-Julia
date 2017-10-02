@@ -8,7 +8,7 @@ using CoverageMapProject
 using Plots
 using JLD
 
-sectorSize = 10.
+sectorSize = 30.
 
 last_session_available = false
 options = 2
@@ -39,11 +39,14 @@ if resp==1
   # load_path = strip(readline())
   # print("Enter saving location: ")
   # save_path = strip(readline())
-  name = "6floor"
-  load_path = "/Users/LTV/Documents/coverage/6floor"
-  save_path = "/Users/LTV/Documents/coverage/6floor"
-  # load_path = "/home/ltv/Documents/coverage/6floor"
-  # save_path = "/home/ltv/Documents/coverage/6floor"
+  name = "town"
+  # name = "6floor"
+  # load_path = "/Users/LTV/Documents/coverage/6floor"
+  # save_path = "/Users/LTV/Documents/coverage/6floor"
+  # load_path = "/home/vromanov/Documents/coverage/6floor"
+  # save_path = "/home/vromanov/Documents/coverage/6floor"
+  load_path = "/home/vromanov/Documents/coverage/town"
+  save_path = "/home/vromanov/Documents/coverage/town"
   proj = CoverageMapProject.create_project(load_path,
                             save_path,
                             name,
