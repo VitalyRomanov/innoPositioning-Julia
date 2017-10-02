@@ -211,67 +211,67 @@ module MapPlan
     return false
   end
 
-  function wallVisIndex(plan::mapPlan)::Array{Bool}
-    # creates a matrix of Bool that indictes visivility of a particular wall
-    # from the standpoint of another wall
-    function initfc_bool(s::SharedArray)
-        for i = eachindex(s)
-            s[i] = false
-        end
-    end
-    now = length(plan.walls)
-    vis_matr = SharedArray{Bool}((now,now),init = initfc_bool)
-    print("Inspecting walls....")
-    @sync @parallel for wall_id = 1:now
-    #   print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
-      if plan.walls[wall_id].special
-          # if wall is special fill corresponding row with true
-          for couple_id = 1:now
-            vis_matr[wall_id,1] = true
-          end
-      else
-          # otherwise check visibility
-          # Shring walls to prevent false paths in corners.
-          wall1 = shrink_polygon(plan.walls[wall_id].polygon,0.8)
-          # this visibility check analyzes corners only. To add visibility for long
-          # walls add center of the wall to the analysis
-          push!(wall1,polygonCenter(wall1))
-          # Filter target walls from the query
-          filter = Array{Int}(2);
-          # Test against walls that are above matrix diagonal.
-          for couple_id = (wall_id+1):now
-            wall2 = shrink_polygon(plan.walls[couple_id].polygon,0.8)
-            push!(wall2,polygonCenter(wall2))
-            # Update filter values here to reduce memory usage
-            filter[1] = wall_id; filter[2] = couple_id;
-            result = checkPolygonVisibility(wall1,
-                                            wall2,
-                                            plan,
-                                            filter)
-            vis_matr[wall_id,couple_id] = result
-        end
-      end
-    end
-
-    for i = 1:now
-      if vis_matr[i,1]
-          for j = 1:now
-            vis_matr[i,j] = true
-            vis_matr[j,i] = true
-          end
-      else
-          for j = (i+1):now
-            vis_matr[j,i] = vis_matr[i,j]
-          end
-      end
-      # the wall should not be visible from its own standpoint
-      vis_matr[i,i] = false
-    end
-
-    print("\n")
-
-    return vis_matr
-  end
+  # function wallVisIndex(plan::mapPlan)::Array{Bool}
+  #   # creates a matrix of Bool that indictes visivility of a particular wall
+  #   # from the standpoint of another wall
+  #   function initfc_bool(s::SharedArray)
+  #       for i = eachindex(s)
+  #           s[i] = false
+  #       end
+  #   end
+  #   now = length(plan.walls)
+  #   vis_matr = SharedArray{Bool}((now,now),init = initfc_bool)
+  #   print("Inspecting walls....")
+  #   @sync @parallel for wall_id = 1:now
+  #   #   print("\rInspecting wall $(wall_id)/$(length(plan.walls))...    ")
+  #     if plan.walls[wall_id].special
+  #         # if wall is special fill corresponding row with true
+  #         for couple_id = 1:now
+  #           vis_matr[wall_id,1] = true
+  #         end
+  #     else
+  #         # otherwise check visibility
+  #         # Shring walls to prevent false paths in corners.
+  #         wall1 = shrink_polygon(plan.walls[wall_id].polygon,0.8)
+  #         # this visibility check analyzes corners only. To add visibility for long
+  #         # walls add center of the wall to the analysis
+  #         push!(wall1,polygonCenter(wall1))
+  #         # Filter target walls from the query
+  #         filter = Array{Int}(2);
+  #         # Test against walls that are above matrix diagonal.
+  #         for couple_id = (wall_id+1):now
+  #           wall2 = shrink_polygon(plan.walls[couple_id].polygon,0.8)
+  #           push!(wall2,polygonCenter(wall2))
+  #           # Update filter values here to reduce memory usage
+  #           filter[1] = wall_id; filter[2] = couple_id;
+  #           result = checkPolygonVisibility(wall1,
+  #                                           wall2,
+  #                                           plan,
+  #                                           filter)
+  #           vis_matr[wall_id,couple_id] = result
+  #       end
+  #     end
+  #   end
+  #
+  #   for i = 1:now
+  #     if vis_matr[i,1]
+  #         for j = 1:now
+  #           vis_matr[i,j] = true
+  #           vis_matr[j,i] = true
+  #         end
+  #     else
+  #         for j = (i+1):now
+  #           vis_matr[j,i] = vis_matr[i,j]
+  #         end
+  #     end
+  #     # the wall should not be visible from its own standpoint
+  #     vis_matr[i,i] = false
+  #   end
+  #
+  #   print("\n")
+  #
+  #   return vis_matr
+  # end
 
 
 
@@ -283,11 +283,12 @@ module MapPlan
             s[i] = false
         end
     end
-    now = length(plan.walls)
+    now = length(plan.walls) # Number of Walls
     vis_matr = SharedArray{Bool}((now,now),init = initfc_bool)
-    print("Inspecting walls....")
-    @sync @parallel for wall_id = 1:now
-
+    # print("Inspecting walls....")
+    for wall_id = 1:now
+        print("\rInspecting walls $wall_id....")
+        # Get polygon for the first wall
         wall_pol = plan.walls[wall_id].polygon
         xy_p = shrink_line!(Line(wall_pol[1][1:2],wall_pol[4][1:2]),-0.8)
         yz_p = shrink_line!(Line(wall_pol[1][2:3],wall_pol[2][2:3]),-0.8)
@@ -297,13 +298,16 @@ module MapPlan
 
 
 
-        for couple_id = (wall_id+1):now
-            wall_pol = plan.walls[wall_id].polygon
-            xy_p2 = shrink_line!(Line(wall_pol[1][1:2],wall_pol[4][1:2]),-0.8)
-            yz_p2 = shrink_line!(Line(wall_pol[1][2:3],wall_pol[2][2:3]),-0.8)
+        @sync @parallel for couple_id = (wall_id+1):now
+            # Get polygon for the second wall
+            wall_pol2 = plan.walls[couple_id].polygon
+            xy_p2 = shrink_line!(Line(wall_pol2[1][1:2],wall_pol2[4][1:2]),-0.8)
+            yz_p2 = shrink_line!(Line(wall_pol2[1][2:3],wall_pol2[2][2:3]),-0.8)
 
             result = false
 
+            # Checking of walls overlap in 2 projections
+            # Walls are assumed to be rectangular
             if lines_crossed(xy_p,xy_p2)
                 result = true
             elseif lines_crossed(yz_p,yz_p2)
@@ -311,7 +315,7 @@ module MapPlan
             end
 
             if !result
-                wall2 = shrink_polygon(plan.walls[couple_id].polygon,0.8)
+                wall2 = shrink_polygon(wall_pol2,0.8)
                 push!(wall2,polygonCenter(wall2))
                 # Update filter values here to reduce memory usage
                 filter[1] = wall_id; filter[2] = couple_id;
@@ -321,7 +325,7 @@ module MapPlan
                                                 filter)
             end
             vis_matr[wall_id,couple_id] = result
-      end
+        end
     end
 
     for i = 1:now
@@ -334,8 +338,9 @@ module MapPlan
 
     print("\n")
 
-    return vis_matr
+    return convert(Array{Bool},vis_matr)
   end
+
 
 
   function no_walls_on_path(path::Line,plan::mapPlan,filter)::Bool
