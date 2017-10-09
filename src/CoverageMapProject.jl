@@ -212,19 +212,19 @@ end
 
 
 
-# function calculate_image_trees(project::CMProject)
-#   if project.image_trees_ready
-#     println("Image trees ready")
-#   else
-#     for (ap_ind,AP) in enumerate(project.APs)
-#       push!(project.AP_visibilities,MapPlan.apVisibIndex(project.plan,AP))
-#       push!(project.image_trees,ImageTree.buildImageTree(project.plan,AP,project.AP_visibilities[ap_ind]))
-#       save_proj(project)
-#     end
-#     project.image_trees_ready = true
-#     save_proj(project)
-#   end
-# end
+function calculate_image_trees(project::CMProject)
+  if project.image_trees_ready
+    println("Image trees ready")
+  else
+    for (ap_ind,AP) in enumerate(project.APs)
+      push!(project.AP_visibilities,MapPlan.apVisibIndex(project.plan,AP))
+      push!(project.image_trees,ImageTree.buildImageTree(project.plan,AP,project.AP_visibilities[ap_ind]))
+      save_proj(project)
+    end
+    project.image_trees_ready = true
+    save_proj(project)
+  end
+end
 
 
 function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.])
