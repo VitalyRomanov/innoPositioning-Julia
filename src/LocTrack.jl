@@ -2,7 +2,7 @@ module LocTrack
 
   # dt = 1
 
-  const rssiSigma = 0.01 # rssi noise stdev
+  const rssiSigma = 0.1 # rssi noise stdev
 
   export getSpaceInfo,estimate_path_viterbi,RssiRecord,PModelParam,pmodel_space,path_to_rssi,path_generation
 
@@ -166,7 +166,7 @@ module LocTrack
                         v::Array{Float64}, # velocity defines mean value
                         si::SpaceInfo,
                         dt::Float64)
-    location = grid_to_coordinates(fold_index(state,si),si.grid_size)
+    location = grid_to_coordinates(fold_index(state,si),si.grid_size) # location in x,y defined by state
     dx = collect(0:1:(si.grid[1]-1))*si.grid_size+si.grid_size/2
     dy = collect(0:1:(si.grid[2]-1))*si.grid_size+si.grid_size/2
     # need support for rectangular space
@@ -247,9 +247,9 @@ module LocTrack
 
 
 
-  function estimate_path_viterbi(signals::Array{RssiRecord},
-                                  signal_map::Array{Array{Float64}},
-                                  spaceInfo::SpaceInfo;
+  function estimate_path_viterbi(signals,
+                                  signal_map,
+                                  spaceInfo;
                                   seed = [-1. -1.],
                                   testing = false,
                                   ip = [],
@@ -287,8 +287,8 @@ module LocTrack
     # initialize state probabilities based on seed location, or assume
     # equal probabilities
     init_step = zeros(Float64,spaceInfo.grid[1],spaceInfo.grid[2])
-    if seed==[-1. -1.]
-      init_step = uniform_location(spaceInfo)
+    if seed==[-1. -1.] # first step
+      init_step = uniform_location(spaceInfo) #set probability 1/N*M for each cell
     else
       init_step = seed_location(seed,spaceInfo)#*1e100
       if testing
@@ -304,7 +304,7 @@ module LocTrack
     # calculate log distribution. log allows to use sum instead of product
     # This is used to initialize probabilities in trellis
     p_rssi = rssiLogDist(signals[1].rssi,
-                          signal_map[signals[1].ap]) # the value is boosted by exp(100)
+                          signal_map[signals[1].ap]) # the value is normolized
 
     # if testing
     #   print("Maximum signal proability is at ",
@@ -413,7 +413,7 @@ module LocTrack
       estimated_path[step_ind,:] = grid_to_coordinates(
                                       fold_index(step_back,spaceInfo),
                                                   spaceInfo.grid_size
-                                      )
+                                      )+spaceInfo.space[:,1]
       step_back = path_back[step_back,step_ind]
     end
 

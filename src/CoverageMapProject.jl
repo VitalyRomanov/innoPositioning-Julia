@@ -64,7 +64,22 @@ function read_measurements(path)
   return measur_avail,measur
 end
 
+function read_measur(path)
+  measur_avail = isdir("$(path)/rssi")
+  measur = Array{Measurement}(0)
+  if measur_avail
+    for file in readdir("$(path)/rssi")
+      if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
+        loc_id = parse(Int,file[1:end-4])
+        location = []
+        rssi = Array(readtable("$(path)/rssi/$(file)",header = false)[:,2])
+        push!(measur,Measurement(loc_id,location[:],rssi))
+      end
+    end
+  end
 
+  return measur_avail,measur
+end
 
 function create_project(init_path,save_path,name;secSize = 30.)
   aps = load_aps("$(init_path)/aps.txt")
@@ -317,7 +332,7 @@ function visualizeWallVis(project, range = [])
     println("done")
 end
 
-function plot_walls!(project::CMProject; ids = [], col = :black, lw = 2)
+function plot_walls!(project; ids = [], col = :black, lw = 2)
   if ids == []
       ids = 1:length(project.plan.walls)
   end
@@ -371,14 +386,14 @@ function plot_map(project::CMProject,map_ind)
 end
 
 
-function plot_paths(project::CMProject,paths,mp_ind)
+function plot_paths(project,paths,mp_ind)
   plot(size(600,600),
       axis = false)
   plot_walls!(project)
 
   for path in paths
     for i=1:length(path)-1
-      plot!([path[i][1],path[i+1][1]],[path[i][2],path[i+1][2]],linecolor=:red)
+      plot!([path[i][1],path[i+1][1]]-project.plan.limits[1,1],[path[i][2],path[i+1][2]]-project.plan.limits[2,1],linecolor=:red)
     end
   end
 
@@ -397,7 +412,7 @@ function fit_parameters(project::CMProject,ap_id::Int)
   # Y stores M observations of rssi at a measurement point
   X = Array{Array{Float64}}(0)
   Y = Array{Array{Float64}}(0)
-
+  RSSI = Array{Float64}(0)
   fs = 7 # font size for plot annotations
 
   dist = [] #distance from meas. point to AP
@@ -447,8 +462,8 @@ function fit_parameters(project::CMProject,ap_id::Int)
       subplot = 1)
 
   for elem in order
-    x = project.measur[elem].location[1]
-    y = project.measur[elem].location[2]
+    x = project.measur[elem].location[1]-project.plan.limits[1,1]
+    y = project.measur[elem].location[2]-project.plan.limits[2,1]
     plot!([x],[y],
         markershape=:diamond,
         markercolor=:blue,
@@ -456,6 +471,7 @@ function fit_parameters(project::CMProject,ap_id::Int)
     annotate!(x,y+2*fs/10,text("$elem",fs),subplot = 1)
     boxplot!([dist[elem]],project.measur[elem].rssi,lab="Loc $(elem)",subplot = 2)
     annotate!(dist[elem]*1.01,mean(project.measur[elem].rssi)*1.01,text("$elem"),subplot = 2)
+
   end
 
   savefig("$(project.path_save_data)/all_it_takes.svg")

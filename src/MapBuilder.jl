@@ -192,7 +192,8 @@ module MapBuilder
         inters[image_id] = wop
 
         #   this is intended to skip paths that go through walls
-        if wop==0 && dist!=-1.
+        # if wop==0 && dist!=-1.
+        if dist!= -1
           used_images += 1
           equation_line[5] = log10(dist)
           equation_line[6] = nrw
