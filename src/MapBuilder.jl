@@ -136,7 +136,7 @@ module MapBuilder
 
 
 
-  function signal_paths_info(Rx::Array{Float64},image_tree::Array{treeNode},plan::mapPlan; ae = 2,rc = 12.53,tc = 5., P0 = 0., sc = 0.5, pldthr = 200.)
+  function signal_paths_info(Rx,image_tree,plan; ae = 2,rc = 12.53,tc = 5., P0 = 0., sc = 0.5, pldthr = 200.)
     # for each path three parameters are estimated: 10*log10(path_dist),
     # number_of_reflections, number_of_walls_on_path
     paths_info = Array{Float64}(0,3)
@@ -192,9 +192,10 @@ module MapBuilder
         inters[image_id] = wop
 
         #   this is intended to skip paths that go through walls
-        if wop==0 && dist!=-1.
+        # if wop==0 && dist!=-1.
+        if dist!= -1
           used_images += 1
-          equation_line[5] = log10(dist)
+          equation_line[5] = 10.0*log10(dist)
           equation_line[6] = nrw
           equation_line[7] = wop
 

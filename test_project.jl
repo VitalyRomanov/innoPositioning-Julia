@@ -1,15 +1,15 @@
-current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
-# current_path = "/home/vromanov/dev/innoPositioning-Julia"
-# current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
-cd(current_path)
+current_path = pwd()
 push!(LOAD_PATH, "$(current_path)/src")
 
 using CoverageMapProject
-using Plots
 using JLD
+using MapVis
 
+# defines the grid size for PBSM index
 sectorSize = 30.
 
+# check if have a recently launched project
+# add an option to load the last project if true
 last_session_available = false
 options = 2
 if isfile("last_session.jld")
@@ -27,36 +27,28 @@ while !(resp in 1:options)
     print("\t3 - load last project\n")
   end
   print("Enter option: ")
-  # resp = 1
-  resp = parse(Int,readline())
+  try
+      resp = parse(Int,readline())
+  catch
+      println("Enter an integer number")
+  end
 end
 
 
 if resp==1
   print("Enter new project name: ")
   name = readline()[1:end-1]
-  print("Enter path for initial data: ")
+  print("Enter path for the project: ")
   load_path = strip(readline())
-  print("Enter saving location: ")
-  save_path = strip(readline())
-  # name = "town"
-  # # name = "6floor"
-  # # load_path = "/Users/LTV/Documents/coverage/6floor"
-  # # save_path = "/Users/LTV/Documents/coverage/6floor"
-  # # load_path = "/home/vromanov/Documents/coverage/6floor"
-  # # save_path = "/home/vromanov/Documents/coverage/6floor"
-  # load_path = "/home/vromanov/Documents/coverage/town"
-  # save_path = "/home/vromanov/Documents/coverage/town"
+  # name = "test8"
+  # load_path = "/Users/LTV/Dropbox (Innopolis)/Work/innoPositioning-Julia-dev/test8"
   proj = CoverageMapProject.create_project(load_path,
-                            save_path,
                             name,
                             secSize = sectorSize)
-  CoverageMapProject.save_session("$(save_path)/$(name).jld")
-  CoverageMapProject.calculate_image_trees(proj)
+  CoverageMapProject.save_session("$(load_path)/$(name).jld")
 elseif resp==2
   print("Enter existing project location :")
   proj_path = strip(readline())
-  #"$(current_path)/res/coverage/init2/1/test_name.jld"
   proj = CoverageMapProject.load_project(proj_path)
   CoverageMapProject.save_session(proj_path)
 elseif resp==3
@@ -65,20 +57,14 @@ else
   println("Unknown choice")
 end
 
-# CoverageMapProject.visualizeWallVis(proj)
-
-# proj.image_trees_ready = false
-# CoverageMapProject.calculate_image_trees(proj)
-
-# CoverageMapProject.calculate_coverage_map(proj)
-# CoverageMapProject.plot_map(proj,1)
+MapVis.visualizeWallVis(proj)
 
 params = CoverageMapProject.fit_parameters(proj,1)
-# JLD.save("/home/ltv/Documents/coverage/town/vm.jld","vm",proj.plan.vis_matr)
-# proj.ssms_ready_count = 0
 # params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
 CoverageMapProject.calculate_coverage_map(proj,parameters = params)
-# CoverageMapProject.recalculate_coverage_map(proj,1,parameters = params)
-# CoverageMapProject.plot_map(proj,1)
 
-# plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)
+
+# space = project.plan.limits[1:2,:]
+# grid_size = 1.
+# grid = convert(Array{Int},floor.((space[:,2] - space[:,1]) / grid_size))
+# SpaceInfo(space,grid,grid_size)

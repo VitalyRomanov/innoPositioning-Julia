@@ -3,7 +3,7 @@ module MapPrimitives
   using Geometry
 
   export Point, Wall3D, Sector, Wall
-  export get_plane_equation!,wall2mbr,get_intersection_point
+  export get_plane_equation!,wall2mbr,wall2dmbr,get_intersection_point
 
   type Wall3D
     id::Int
@@ -54,6 +54,14 @@ module MapPrimitives
   function wall2mbr(wall::Wall3D)
     v1 = minimum([wall.polygon[1] wall.polygon[2] wall.polygon[3] wall.polygon[4]],2)
     v2 = maximum([wall.polygon[1] wall.polygon[2] wall.polygon[3] wall.polygon[4]],2)
+    return MBR(v1,v2)
+  end
+
+  function wall2dmbr(wall::Wall3D)
+    v1 = minimum([wall.polygon[1] wall.polygon[2] wall.polygon[3] wall.polygon[4]],2)
+    v2 = maximum([wall.polygon[1] wall.polygon[2] wall.polygon[3] wall.polygon[4]],2)
+    v1[3] = 0.
+    v2[3] = 0.
     return MBR(v1,v2)
   end
 

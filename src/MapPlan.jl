@@ -2,6 +2,7 @@ module MapPlan
   using Geometry
   using MapPrimitives
   using PBSM
+  using RadixTree
 
   export mapPlan
   export read_data,downsample_maps,no_walls_on_path,walls_on_path
@@ -10,6 +11,7 @@ module MapPlan
     walls::Array{Wall3D}
     limits::Array{Int}
     index::PBSM.Pbsm
+    index2d
     vis_matr::Array{Bool}
   end
 
@@ -18,35 +20,17 @@ module MapPlan
     return PBSM.probe(wall_index,line2mbr(path))
   end
 
+  function query_2d(path::Line,wall_index)
+    return RadixTree.probe(wall_index,line2mbr(path))
+  end
+
   function create_index(walls,lims;grid_scl = 10.)
     return PBSM.create_index(PBSM.obj2mbr(walls,wall2mbr),lims,grd_scl = grid_scl)
   end
 
-
-  # function visualizeWallVis(project, range = [])
-  #     if range == []
-  #         range = 1:length(plan.walls)
-  #     end
-  #
-  #     wallVisOutPath = project.path_save_data+"/wall_Vis/"
-  #
-  #     if !isdir(wallVisOutPath)
-  #         mkdir(wallVisOutPath)
-  #     end
-  #
-  #     plot()
-  #
-  #     for wall_id = range
-  #         plot_walls!(project)
-  #         plot_walls!(project,
-  #                   ids = find(project.plan.vis_matr[wall_id,:]),
-  #                   col = :red)
-  #         plot_walls!(project,
-  #                   ids = [wall_id]),
-  #                   col = :green)
-  #         savefig(wallVisOutPath+"wall_$(wall_id).svg")
-  #     end
-  # end
+  function create_2d_index(walls,lims;grid_scl = 10.)
+      return RadixTree.create_index(RadixTree.obj2mbr(walls,wall2dmbr),lims)
+  end
 
 
 
@@ -71,72 +55,6 @@ module MapPlan
     end
     return new_map
   end
-
-  # function plot_walls_2d(walls,x_max,y_max)
-  #   gr()
-  #   town_plan = plot([0,0],[0,0],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-  #   for wall in walls
-  #     plot!(wall[:,1],wall[:,2],linecolor = :black,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-  #   end
-  #   return town_plan
-  # end
-
-  # function plot_walls(walls,x_max,y_max;ids = [],col = :black)
-  #   gr()
-  #   if ids = []
-  #       ids = 1:length(walls)
-  #   end
-  #   town_plan = plot([0,0],[0,0],linecolor = col,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-  #   for wall in walls[ids]
-  #     plot!([wall.points[1].val[1],wall.points[4].val[1]],[wall.points[1].val[2],wall.points[4].val[2]],linecolor = col,xlims=(0,x_max),ylims=(0,y_max),grid=false,legend=false,axis=false)
-  #   end
-  #   return town_plan
-  # end
-
-  # function plot_walls!(project; ids = [], col = :black)
-  #   if ids == []
-  #       ids = 1:length(project.plan.walls)
-  #   end
-  #
-  #   for wall in project.plan.walls[ids]
-  #     if wall.polygon[1][3]==wall.polygon[3][3]
-  #       continue
-  #     end
-  #     xs = [wall.polygon[1][1],wall.polygon[4][1]]
-  #     ys = [wall.polygon[1][2],wall.polygon[4][2]]
-  #     plot!(xs,ys,
-  #         linecolor=col,
-  #         xlims = project.plan.limits[1,:],
-  #         ylims = project.plan.limits[2,:],
-  #         legend = false)
-  #   end
-  # end
-
-  # function read_data_2d(data_file)
-  #   walls = []
-  #   input = open(data_file)
-  #   for (line_ind,line) in enumerate(eachline(input))
-  #     strvec = split(line[1:end-2]," ")
-  #     v = map(x->parse(Float64,x),strvec)
-  #     wall = reshape(v[:],2,Int(length(v)/2))'
-  #     push!(walls,wall)
-  #   end
-  #   return walls
-  # end
-
-
-  # function create_all_vertex_paths(polygon1::Array{Array{Float64}},polygon2::Array{Array{Float64}})
-  #   paths = Array{Line}(length(polygon1)*length(polygon2))
-  #   path_counter = 1
-  #   for i = 1:length(polygon1)
-  #     for j = 1:length(polygon2)
-  #       paths[path_counter] = Line(polygon1[i],polygon2[j])
-  #       path_counter += 1
-  #     end
-  #   end
-  #   return paths
-  # end
-
 
   function centerDistance(pol1,pol2)
     # calculate the centers of two polygons and find the distance between them
@@ -176,8 +94,8 @@ module MapPlan
 
       result = false
       test_path = Line()
-      test_path.v1 = AP
       for vertex in shrkd_wll_plgn2
+        test_path.v1 = AP
         test_path.v2 = vertex
         if no_walls_on_path(test_path,plan)
           result = true
@@ -342,6 +260,75 @@ module MapPlan
   end
 
 
+  function wallsto2d(walls::Array{Wall3D})
+      walls2d = Array{Any}(0)
+      for wall in walls
+          push!(walls2d,(wall.id,[wall.polygon[1][1:2] wall.polygon[4][1:2]],wall.special))
+      end
+      return walls2d
+  end
+
+  function wall_vis_2D(plan::mapPlan)
+      function initfc_bool(s::SharedArray)
+          for i = eachindex(s)
+              s[i] = false
+          end
+      end
+      now = length(plan.walls) # Number of Walls
+      vis_matr = SharedArray{Bool}((now,now),init = initfc_bool)
+
+      walls2D = wallsto2d(plan.walls)
+      index2d = plan.index2d
+      for (f_i,f_wall) in enumerate(walls2D)
+          print("\rInspecting wall $f_i ....")
+          if f_wall[3]
+              vis_ind = get_visible_walls_sp(f_i,plan)
+              println(vis_ind)
+          else
+              vis_ind = get_visible_walls(walls2D,f_i,plan)
+          end
+          for s_i in vis_ind
+              vis_matr[f_i,s_i] = true
+          end
+      end
+      println("")
+      return convert(Array{Bool},vis_matr)
+  end
+
+
+  function get_visible_walls_sp(f_i,plan)
+      wall = plan.walls[f_i]
+      path = Line(wall.polygon[1],wall.polygon[3])
+      path.v1[3] = -1.;path.v2[3] = -1.;
+      filtered_walls = query_2d(path,plan.index2d)
+      return filtered_walls
+  end
+
+
+  function get_visible_walls(walls2D,f_i,plan)
+      walls_list = Array{Int}(0)
+      vis_len = 100.
+      persp = walls2D[f_i][2]
+      persp_len = norm(persp[:,2]-persp[:,1])
+      v1 = zeros(Float64,3);v2 = zeros(Float64,3)
+      for off = 0:1:persp_len
+          dir_vec = (persp[:,2]-persp[:,1])/persp_len
+          pov = persp[:,1] + off * dir_vec
+          for r = 0:.1:2*pi
+              ray = [cos(r)*vis_len; sin(r)*vis_len]
+              v1[1:2] = pov; v2[1:2] = ray
+              trace = Line(v1,v2)
+              cl_id = closest_wall(trace,plan,walls2D)
+              if cl_id != -1
+                  push!(walls_list,cl_id)
+              end
+          end
+      end
+      return walls_list
+  end
+
+
+
 
   function no_walls_on_path(path::Line,plan::mapPlan,filter)::Bool
     shrink_line!(path,float_err_marg)
@@ -366,6 +353,28 @@ module MapPlan
       end
     end
     return true
+  end
+
+
+  function closest_wall(path::Line,plan::mapPlan,walls2D)
+      filtered_walls = walls2D[query_2d(path,plan.index2d)]
+      min_dist = 1.0e8
+      min_ind = -1
+      path2d = Line(path.v1[1:2],path.v2[1:2])
+      for wall in filtered_walls
+          wi = wall[2]
+          wl = Line(wi[:,1],wi[:,2])
+        #   println(path2d,wl)
+          ip,valid = lines_intersection(path2d,wl)
+          if valid
+              dist = norm(path2d.v1-ip)
+              if dist < min_dist
+                  min_dist = dist
+                  min_ind = wall[1]
+              end
+          end
+      end
+      return min_ind
   end
 
   function walls_on_path(path::Line,plan::mapPlan)
