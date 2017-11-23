@@ -31,7 +31,7 @@ end
 
 
 function obj2mbr(walls,obj2mbr)
-  mbrs = Array(MBR,length(walls))
+  mbrs = Array{MBR}(length(walls))
   for (wall_ind,wall) in enumerate(walls)
     mbrs[wall_ind] = obj2mbr(wall)
   end
@@ -68,21 +68,19 @@ end
 
 
 function determine_range(mortonCodes, i)
-  dataSize = length(mortonCodes)
+    # contains errors => does not work properly
+    # allows for concurrent BVH generation
+    dataSize = length(mortonCodes)
 	current = mortonCodes[i]
 
-	dir = leading_zeros(current$mortonCodes[i+1])-leading_zeros(current$mortonCodes[i-1])
+	dir = leading_zeros(xor(current,mortonCodes[i+1]))-leading_zeros(xor(current,mortonCodes[i-1]))
 	d = (dir<0)?-1:1
 
-  # if i<=7
-  #   println(leading_zeros(mortonCodes[i])," ",leading_zeros(mortonCodes[i+1])," ",leading_zeros(mortonCodes[i]$mortonCodes[i+1]))
-  # end
+	deltaMin = leading_zeros(xor(current,mortonCodes[i-d]))
 
-	deltaMin = leading_zeros(current$mortonCodes[i-d])
-
-  lMax = 1
+    lMax = 1
 	nextPosition = i+lMax*d
-	deltaCurrent = leading_zeros(current$mortonCodes[i+lMax*d])
+	deltaCurrent = leading_zeros(xor(current,mortonCodes[i+lMax*d]))
 	while(deltaCurrent > deltaMin)
 		lMax *= 2
 		nextPosition =  i+lMax*d
@@ -90,16 +88,16 @@ function determine_range(mortonCodes, i)
 			break
 		elseif(nextPosition > dataSize)
 			break
-    end
-		deltaCurrent = leading_zeros(current$mortonCodes[i+lMax*d])
+        end
+		deltaCurrent = leading_zeros(xor(current,mortonCodes[i+lMax*d]))
 	end
 
 	l = 0
-  t = lMax
-  j = 0
-  doit = true
+    t = lMax
+    j = 0
+    doit = true
 	while(t>=1 || doit)
-    doit = false
+        doit = false
 		nextPosition = 1
 		nextPosition = i+(l+t)*d
 		if (nextPosition<1)#if (nextPosition<1)
@@ -108,11 +106,11 @@ function determine_range(mortonCodes, i)
 		if (nextPosition > dataSize)
 			nextPosition = dataSize
 		end
-		if(leading_zeros(current$mortonCodes[nextPosition])>deltaMin)
+		if(leading_zeros(xor(current,mortonCodes[nextPosition]))>deltaMin)
 			l = l + t
-    end
+        end
 		t=Int(floor(t/2))
-  end
+    end
 	j = i+l*d
 	j = (j<1)?1:j
 	j = (j>dataSize)?dataSize:j
@@ -136,7 +134,16 @@ function findSplit(mortonCodes,rng)
     return (rng[1] + rng[2]) >> 1
   end
 
-  commonPrefix = leading_zeros(firstCode $ lastCode)
+  commonPrefix = leading_zeros(xor(firstCode , lastCode))
+
+  # for i = 1:(rng[2] - rng[1])
+  #     split = rng[1]+i
+  #     splitCode = mortonCodes[split]
+  #     splitPrefix = leading_zeros(xor(firstCode , splitCode))
+  #     if splitPrefix == commonPrefix
+  #         return split - 1
+  #     end
+  # end
 
   split = rng[1]
   step = rng[2] - rng[1]
@@ -150,7 +157,7 @@ function findSplit(mortonCodes,rng)
 
     if (newSplit < rng[2])
       splitCode = mortonCodes[newSplit]
-      splitPrefix = leading_zeros(firstCode $ splitCode)
+      splitPrefix = leading_zeros(xor(firstCode , splitCode))
       if (splitPrefix > commonPrefix)
         split = newSplit
       end
@@ -162,7 +169,8 @@ end
 
 
 function assign_inner_nodes(tree,IDs,mortonCodes)
-
+  # allows for concurrent BVN generation
+  # deprecated due to errors in determine_range()
   dataSize = length(mortonCodes)
 
   for i = 1:length(IDs)-1
@@ -176,7 +184,7 @@ function assign_inner_nodes(tree,IDs,mortonCodes)
 
 		split = findSplit(mortonCodes,rng)
 
-    ancestors = Array(Int,2)
+        ancestors = Array{Int}(2)
 		if (rng[1]==split)
 			ancestors[1] = IDs[split]+dataSize-1
 		else
@@ -188,28 +196,49 @@ function assign_inner_nodes(tree,IDs,mortonCodes)
 			ancestors[2] = split+1
 		end
 
-    # println("Node $(i) $(bin(mortonCodes[i])) cvg $(rng[1])-$(rng[2]) split $(split) lc $(ancestors[1]) rc $(ancestors[2])")
-
-    tree.chld[i] = ancestors
-    tree.coverage[i] = rng
-    tree.parent[ancestors[1]] = i
-    tree.parent[ancestors[2]] = i
-
-    # if (mortonCodes[i]==354906307)||(mortonCodes[i]==397834323)
-      # println("$(i) $((mortonCodes[i])) $(rng) $(ancestors)")
-    # end
-
+        tree.chld[i] = ancestors
+        tree.coverage[i] = rng
+        tree.parent[ancestors[1]] = i
+        tree.parent[ancestors[2]] = i
   end
 
   return tree
 end
 
 
+function inner_assignment(tree,IDs,mortonCodes,rng,i)
+    dataSize = length(mortonCodes)
+    split = findSplit(mortonCodes,rng)
+
+    ancestors = Array{Int}(2)
+    if (rng[1]==split)
+        ancestors[1] = IDs[split]+dataSize-1
+    else
+        ancestors[1] = split
+        inner_assignment(tree,IDs,mortonCodes,[rng[1],split],split)
+    end
+    if (rng[2]==split+1)
+        ancestors[2] = IDs[split+1]+dataSize-1
+    else
+        ancestors[2] = split+1
+        inner_assignment(tree,IDs,mortonCodes,[split+1,rng[2]],split+1)
+    end
+
+    tree.chld[i] = ancestors
+    tree.coverage[i] = rng
+    tree.parent[ancestors[1]] = i
+    tree.parent[ancestors[2]] = i
+end
+
+
+
+
+
 function getMBR(tree,objects,index)
 	if(index>tree.numberOfInternalNodes)
     return objects[index-tree.numberOfInternalNodes]
 	else
-    if isdefined(tree.mbr,index)
+    if isassigned(tree.mbr,index)
       return tree.mbr[index]
     else
       return -1
@@ -233,7 +262,7 @@ end
 
 
 function assignBV(tree,objects)
-  queued = Array(Bool,tree.numberOfInternalNodes)*false
+  queued = Array{Bool}(tree.numberOfInternalNodes)*false
 
   for i = 1:length(objects)
     parent = tree.parent[tree.numberOfInternalNodes+i]
@@ -264,12 +293,20 @@ end
 
 
 function generate_hierarchy(tree,IDs,morton_codes,objects)
-  tree = assign_inner_nodes(tree,IDs,morton_codes)
+  # tree = assign_inner_nodes(tree,IDs,morton_codes)
+  inner_assignment(tree,IDs,morton_codes,[1,length(morton_codes)],1)
+  tree.parent[1] = -1
 
   # println("$(tree.parent)")
 
   # for i=1:length(objects)*2-1
-  #   println("Node $(i) $(bin(morton_codes[i])) cvg $(tree.coverage[i][1])-$(tree.coverage[i][2]) lc $(tree.chld[i][1]) rc $(tree.chld[i][2]) $(tree.mbr[i])")
+  #   print("Node $(i)")
+  #   if i<length(objects)
+  #       print("\tcvg\t$(tree.coverage[i][1])\t$(tree.coverage[i][2])\tlc\t$(tree.chld[i][1])\trc\t$(tree.chld[i][2])\t$(tree.parent[i])\n")
+  #   else
+  #       print("\t\t\t\t\t\t\t\t$(tree.parent[i])\n")
+  #   end
+  #   # println("Node $(i) $(bin(morton_codes[i])) cvg $(tree.coverage[i][1])-$(tree.coverage[i][2]) lc $(tree.chld[i][1]) rc $(tree.chld[i][2]) ")# $(tree.parent[i]) $(tree.mbr[i])")
   # end
 
   tree = assignBV(tree,objects)
@@ -281,15 +318,16 @@ function generate_hierarchy(tree,IDs,morton_codes,objects)
 end
 
 function create_index(objects,lims)
+    println("Creating 2D index")
   dataSize = length(objects)
   tree = radixTree(dataSize,
                     dataSize-1,
-                    Array(MBR,dataSize),
+                    Array{MBR}(dataSize),
                     zeros(Int,dataSize),
-                    Array(Array{Int},dataSize),
-                    Array(Array{Int},dataSize),
+                    Array{Array{Int}}(dataSize),
+                    Array{Array{Int}}(dataSize),
                     zeros(Int,dataSize*2-1),
-                    Array(MBR,dataSize-1))
+                    Array{MBR}(dataSize-1))
 
   tree.objects = deepcopy(objects)
 
@@ -349,8 +387,8 @@ end
 
 
 function probe(tree::radixTree,obj::MBR)
-  pairs = Array(Int,0)
-  nodestack = Array(Int,0)
+  pairs = Array{Int}(0)
+  nodestack = Array{Int}(0)
 
   objects = tree.objects
   ray = Line(minimum([obj.v1 obj.v2],2),maximum([obj.v1 obj.v2],2))

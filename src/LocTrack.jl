@@ -99,7 +99,12 @@ module LocTrack
   ####### Project functions
 
   function path_generation(seed,path_lenght,signal_map,spaceInfo, dt = 1.)
-    path = zeros(Float64,path_lenght,2)
+    # seed : initial location
+    # path_lenght : --||--
+    # signal_map : signal strength matrix
+    # spaceInfo :
+    # dt :
+    path = zeros(Float64,path_lenght,2) # stores generated path here
     # rssi = zeros(Float64,path_lenght,1)
     signals  = Array(RssiRecord,path_lenght)
     v = zeros(Float64,2,1)
@@ -117,7 +122,7 @@ module LocTrack
       while !valid_sample
         a = randn(2,1)
         s = path[i-1,:] + v*dt + a*dt^2/2
-        if (s[1]>0) && (s[2]>0) && (s[1]<spaceInfo.space[1]) && (s[2]<spaceInfo.space[2])
+        if (s[1]>0) && (s[2]>0) && (s[1]<spaceInfo.space[1,1]) && (s[2]<spaceInfo.space[2,1])
           valid_sample = true
         end
       end
@@ -126,7 +131,6 @@ module LocTrack
       index = coordinates_to_grid(path[i,:],spaceInfo.grid_size)
       rssi = randn()+signal_map[index[1],index[2]]
       signals[i] = RssiRecord(rssi,1,1.)
-
     end
     return path,signals
   end

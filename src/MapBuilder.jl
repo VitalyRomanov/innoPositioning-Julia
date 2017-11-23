@@ -136,7 +136,7 @@ module MapBuilder
 
 
 
-  function signal_paths_info(Rx::Array{Float64},image_tree::Array{treeNode},plan::mapPlan; ae = 2,rc = 12.53,tc = 5., P0 = 0., sc = 0.5, pldthr = 200.)
+  function signal_paths_info(Rx,image_tree,plan; ae = 2,rc = 12.53,tc = 5., P0 = 0., sc = 0.5, pldthr = 200.)
     # for each path three parameters are estimated: 10*log10(path_dist),
     # number_of_reflections, number_of_walls_on_path
     paths_info = Array{Float64}(0,3)
