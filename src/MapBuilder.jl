@@ -195,7 +195,7 @@ module MapBuilder
         # if wop==0 && dist!=-1.
         if dist!= -1
           used_images += 1
-          equation_line[5] = log10(dist)
+          equation_line[5] = 10.0*log10(dist)
           equation_line[6] = nrw
           equation_line[7] = wop
 

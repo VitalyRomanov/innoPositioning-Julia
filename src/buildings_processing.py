@@ -4,7 +4,7 @@ from math import *
 import matplotlib.pyplot as plt
 api = overpy.Overpass()
 
-walls_file = open("walls_ways.txt","w")
+walls_file = open("walls_ways.txt","w+")
 
 class nn:
 	def __init__(self,lat,lon):
@@ -28,8 +28,10 @@ def getXYpos(relativeNullPoint, p):
 
 
 def plotAPloc(nullNode):
-	AP_lat = [46.716524,46.716344,46.716985,46.716857,46.717188,46.716027,46.714034,46.715187,46.716451,46.717596]
-	AP_lon = [11.652545,11.652767,11.654857,11.654715,11.657764,11.656766,11.660874,11.654817,11.65798,11.658105]
+	AP_lat = [55.75336]
+	AP_lon = [48.74138]
+	# AP_lat = [46.716524,46.716344,46.716985,46.716857,46.717188,46.716027,46.714034,46.715187,46.716451,46.717596]
+	# AP_lon = [11.652545,11.652767,11.654857,11.654715,11.657764,11.656766,11.660874,11.654817,11.65798,11.658105]
 
 	for i in range(len(AP_lat)):
 		ap_node = nn(AP_lat[i],AP_lon[i])
@@ -39,10 +41,14 @@ def plotAPloc(nullNode):
 def writeAreaBorder(nullNode):
 	lat = [46.7129922666101,46.7186377333899]
 	lon = [11.6499116535865,11.6635073464135]
-	b1 = nn(46.7129922666101,11.6499116535865)
-	b2 = nn(46.7186377333899,11.6499116535865)
-	b3 = nn(46.7186377333899,11.6635073464135)
-	b4 = nn(46.7129922666101,11.6635073464135)
+	b1 = nn(55.75335,48.73943)
+	b2 = nn(55.75469,48.73982)
+	b3 = nn(55.75441,48.74222)
+	b4 = nn(55.75301,48.74163)
+	# b1 = nn(46.7129922666101,11.6499116535865)
+	# b2 = nn(46.7186377333899,11.6499116535865)
+	# b3 = nn(46.7186377333899,11.6635073464135)
+	# b4 = nn(46.7129922666101,11.6635073464135)
 
 	temp_x,temp_y = getXYpos(nullNode,b1)
 	walls_file.write(repr(temp_x)+","+repr(temp_y)+","+repr(0.0))
@@ -71,15 +77,16 @@ def writeAreaBorder(nullNode):
 
 
 
-nullNode = nn(46.7129922666101,11.6499116535865)
+nullNode = nn(55.75335,48.73943)
 
 writeAreaBorder(nullNode)
 
-print "Receiving...."
+print ("Receiving....")
 
-result = api.query("(way(46.7129922666101,11.6499116535865,46.7186377333899,11.6635073464135)[\"building\"~\".\"];node(w););out;")
+result = api.query("(way(55.75335,48.73943,55.75441,48.74222)[\"building\"~\".\"];node(w););out;")
+# result = api.query("(way(46.7129922666101,11.6499116535865,46.7186377333899,11.6635073464135)[\"building\"~\".\"];node(w););out;")
 
-print "Processing..."
+print ("Processing...")
 
 for way in result.ways:
 	x = []
@@ -88,7 +95,10 @@ for way in result.ways:
 		temp_x,temp_y = getXYpos(nullNode,node)
 		x.append(temp_x)
 		y.append(temp_y)
+		print("x=",x)
+		print("y=",y)
 		walls_file.write(repr(temp_x)+" "+repr(temp_y)+" ")
+		print("second loop")
 		# if(ind_node):
 		# 	walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(300.0))
 		# 	walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(0.0)+"\n")
@@ -100,7 +110,12 @@ for way in result.ways:
 	# walls_file.write(","+repr(x[0])+","+repr(y[0])+","+repr(0.0)+"\n")
 	walls_file.write("\n")
 	plt.plot(x,y,'b')
-
+	print("first loop")
+print("plotAPloc(nullNode)")
 plotAPloc(nullNode)
+print("plt.show()")
 plt.show()
+print("walls_file.close()")
 walls_file.close()
+print("finish")
+

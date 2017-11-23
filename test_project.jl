@@ -1,6 +1,4 @@
-current_path = pwd()#"/Users/LTV/dev_projects/innoPositioning-Julia"
-# current_path = "/home/vromanov/dev/innoPositioning-Julia"
-# current_path = "/Users/LTV/dev_projects/innoPositioning-Julia"
+current_path = pwd()
 cd(current_path)
 push!(LOAD_PATH, "$(current_path)/src")
 
@@ -8,6 +6,7 @@ using CoverageMapProject
 using Plots
 using JLD
 using LocTrack
+using StatsBase
 
 sectorSize = 30.
 
@@ -38,16 +37,6 @@ if resp==1
   name = readline()[1:end-1]
   print("Enter path for initial data: ")
   load_path = strip(readline())
-  # print("Enter saving location: ")
-  # save_path = strip(readline())
-  # name = "town"
-  # # name = "6floor"
-  # # load_path = "/Users/LTV/Documents/coverage/6floor"
-  # # save_path = "/Users/LTV/Documents/coverage/6floor"
-  # # load_path = "/home/vromanov/Documents/coverage/6floor"
-  # # save_path = "/home/vromanov/Documents/coverage/6floor"
-  # load_path = "/home/vromanov/Documents/coverage/town"
-  # save_path = "/home/vromanov/Documents/coverage/town"
   proj = CoverageMapProject.create_project(load_path,
                             load_path,
                             name,
@@ -57,7 +46,6 @@ if resp==1
 elseif resp==2
   print("Enter existing project location :")
   proj_path = strip(readline())
-  #"$(current_path)/res/coverage/init2/1/test_name.jld"
   proj = CoverageMapProject.load_project(proj_path)
   CoverageMapProject.save_session(proj_path)
 elseif resp==3
@@ -68,78 +56,57 @@ end
 
 # CoverageMapProject.visualizeWallVis(proj)
 
-# proj.image_trees_ready = false
-# CoverageMapProject.calculate_image_trees(proj)
-
-# CoverageMapProject.calculate_coverage_map(proj)
-# CoverageMapProject.plot_map(proj,1)
-
 params = CoverageMapProject.fit_parameters(proj,1)
-# JLD.save("/home/ltv/Documents/coverage/town/vm.jld","vm",proj.plan.vis_matr)
-# proj.ssms_ready_count = 0
 # params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
 CoverageMapProject.calculate_coverage_map(proj,parameters = params)
-# CoverageMapProject.recalculate_coverage_map(proj,1,parameters = params)
-# CoverageMapProject.plot_map(proj,1)
+
+
 signals = []
-
-
-
-
- # measur_avail,measur = CoverageMapProject.read_measur("/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test7")
-
-real_path = []
-proj.measur
-time = [1,3,5,7,10,12,17,22,25,26,31,34,39,41]
-i=1
-
-for (meas_ind,measur) in enumerate(proj.measur)
-  push!(signals,[median(measur.rssi),time[i]])
-  push!(real_path, [measur.location[1],measur.location[2], measur.loc_id])
-  i+=1
-  # println("signals=", measur.location," | ", measur.loc_id)
-end
-# for (meas_ind,m) in enumerate(measur)
-#   push!(signals,[median(m.rssi),m.loc_id])
-#   # push!(real_path, [measur.location[1],measur.location[2], measur.loc_id])
-#   # println("signals=", measur.location," | ", measur.loc_id)
-# end
-
-# println("signals=", signals)
-
-
-# println("real_path=", real_path)
-# proj
-sort!(signals, by = x -> x[2]);
-# println("signals=", signals)
-sort!(real_path, by = x -> x[3]);
-# println("signals=", real_path)
-
-
-signalsOfRSSI = LocTrack.RssiRecord[]
-for (value, id) in signals
-  push!(signalsOfRSSI, LocTrack.RssiRecord(value,1,id))
-end
-println("signalsOfRSSI=", signalsOfRSSI)
-# ssm = JLD.load("ssm1....",ssm)
-ssm = JLD.load("/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test7/ssm_1.jld","ssm")
 
 
 space = proj.plan.limits[1:2,:]
 grid_size = 1.
 grid = convert(Array{Int},floor.((space[:,2] - space[:,1]) / grid_size))
 spaceInfo = LocTrack.SpaceInfo(space,grid,grid_size)
+ssm = JLD.load("/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test10/ssm_1.jld","ssm") # use data from test 6
 
-# signal_map::Array{Array{Float64}}, +
-# spaceInfo::SpaceInfo;
+real_path = []
+time = [1,3,5,7,10,12,17,22,25,26,31,34,39,41]
+i=1
+
+for (meas_ind,measur) in enumerate(proj.measur)
+  dt = (i==1)?1:time[i]-time[i-1] # RssiRecord stores dt instead of t
+  iloc = Int.(ceil.((measur.location[1:2]-space[:,1])./grid_size)) # the index of ssm that corresponds to the true location
+  ss = ssm[iloc[1],iloc[2]] # use signal strength from previous measurements (for now)
+  # push!(signals,[measur.rssi[1],dt]) # these values are way way off
+  push!(signals,[mode(measur.rssi),dt,measur.loc_id]) # use the same exact values as we expect from ssm for testing
+  push!(real_path, [measur.location[1],measur.location[2], measur.loc_id])
+  println("Expected $(ss), observed $(signals[end][1]) $(measur.loc_id)")
+  i+=1
+end
+
+# proj
+sort!(signals, by = x -> x[3]);
+# println("signals=", signals)
+sort!(real_path, by = x -> x[3]);
+# println("signals=", real_path)
+for (m, m2 ) in enumerate(signals)
+  println("observed $(signals[m])")
+end
+
+signalsOfRSSI = LocTrack.RssiRecord[]
+for (value, id, loc_id) in signals
+  println("rssi = $(value) \t loc = $(loc_id)")
+  push!(signalsOfRSSI, LocTrack.RssiRecord(value,1,id))
+end
+println("signalsOfRSSI=", signalsOfRSSI)
+
+
+
 traj = []
 traj,~ = LocTrack.estimate_path_viterbi(signalsOfRSSI, [ssm], spaceInfo)
 pths = [ [ traj[i,1],traj[i,2] ] for i=1:size(traj,1) ]
 
-# CoverageMapProject.plot_paths(proj,[pths],1)
-# plot(proj.ssms[1]',seriestype=:heatmap,seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),zlims=(-40,30),legend = false,grid=false,axis=false)
-
-LocTrack.path_generation( size(signalsOfRSSI),[ssm],spaceInfo)#seed,
 
 function plot_map(ssm,project,map_ind,filename,  paths2,paths)
     rssi_min = -100.
@@ -147,7 +114,7 @@ function plot_map(ssm,project,map_ind,filename,  paths2,paths)
 
     println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
 
-    plot(ssm,
+    plot(ssm', # need to transpose this
         seriestype=:heatmap,
         seriescolor=ColorGradient([colorant"white", colorant"orange", colorant"red"]),
         zlims=(rssi_min,rssi_max),
@@ -196,17 +163,5 @@ function plot_map(ssm,project,map_ind,filename,  paths2,paths)
     # savefig("map_.png")
 end
 
-plot_map(ssm,proj,1,"/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test7/paths/111.png",[pths],[real_path])
-# plot_map(ssm,proj,1,"/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test8/paths/111.png",[pths])#,[real_path)
-
-# type RssiRecord
-#   rssi::Float64
-#   ap::Int
-#   dt::Float64
-# end
-#
-# type SpaceInfo
-#   space::Array{Int}
-#   grid::Array{Int}
-#   grid_size::Float64
-# end
+# your_path = "/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test6/paths"
+plot_map(ssm,proj,1,"/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test10/paths/111.svg",[pths],[real_path])
