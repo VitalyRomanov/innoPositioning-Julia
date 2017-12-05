@@ -53,6 +53,18 @@ elseif resp==2
   CoverageMapProject.save_session(proj_path)
 elseif resp==3
   proj = CoverageMapProject.load_session()
+# elseif resp==4
+#   print("Enter existing first project location :")
+#   proj_path = strip(readline())
+#   proj = CoverageMapProject.load_project(proj_path)
+#   CoverageMapProject.save_session(proj_path)
+#   print("Enter existing second project location :")
+#   proj_path_2 = strip(readline())
+#   proj_2 = CoverageMapProject.load_project(proj_path_2)
+#   CoverageMapProject.save_session(proj_path_2)
+#   params_1 = CoverageMapProject.fit_parameters(proj,1)
+#   params_2 = CoverageMapProject.fit_parameters(proj_2,2)
+#   CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 else
   println("Unknown choice")
 end

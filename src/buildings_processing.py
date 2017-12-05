@@ -36,6 +36,7 @@ def plotAPloc(nullNode):
 	for i in range(len(AP_lat)):
 		ap_node = nn(AP_lat[i],AP_lon[i])
 		temp_x,temp_y = getXYpos(nullNode,ap_node)
+		print("AP = ", temp_x," | y=", temp_y)
 		plt.plot(temp_x,temp_y,'ro')
 
 def writeAreaBorder(nullNode):
@@ -79,7 +80,7 @@ def writeAreaBorder(nullNode):
 
 nullNode = nn(55.75335,48.73943)
 
-writeAreaBorder(nullNode)
+# writeAreaBorder(nullNode)
 
 print ("Receiving....")
 
@@ -87,30 +88,40 @@ result = api.query("(way(55.75335,48.73943,55.75441,48.74222)[\"building\"~\".\"
 # result = api.query("(way(46.7129922666101,11.6499116535865,46.7186377333899,11.6635073464135)[\"building\"~\".\"];node(w););out;")
 
 print ("Processing...")
-
+value =0
+ind_way = 0
 for way in result.ways:
 	x = []
 	y = []
-	for ind_node,node in enumerate(way.nodes):
-		temp_x,temp_y = getXYpos(nullNode,node)
-		x.append(temp_x)
-		y.append(temp_y)
-		print("x=",x)
-		print("y=",y)
-		walls_file.write(repr(temp_x)+" "+repr(temp_y)+" ")
-		print("second loop")
-		# if(ind_node):
-		# 	walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(300.0))
-		# 	walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(0.0)+"\n")
-		# walls_file.write(repr(temp_x)+","+repr(temp_y)+","+repr(0.0))
-		# walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(300.0))
-	# x.append(x[0])
-	# y.append(y[0])
-	# walls_file.write(","+repr(x[0])+","+repr(y[0])+","+repr(300.0))
-	# walls_file.write(","+repr(x[0])+","+repr(y[0])+","+repr(0.0)+"\n")
-	walls_file.write("\n")
-	plt.plot(x,y,'b')
-	print("first loop")
+	print("index way = ", ind_way)
+	if (ind_way != 5):
+		for ind_node,node in enumerate(way.nodes):
+			print("int node = ", ind_node, "value = ", value)
+			temp_x,temp_y = getXYpos(nullNode,node)
+			# if (value != 59):
+			# plt.plot(temp_x, temp_y, 'b')
+			# plt.show()
+			# value +=1
+			x.append(temp_x)
+			y.append(temp_y)
+			print("x=",x)
+			print("y=",y)
+			# walls_file.write(repr(temp_x) + " "+repr(temp_y)+ " ")
+			value += 1
+			if(ind_node):
+				walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(2.0))
+				walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(0)+"\n")
+			walls_file.write(repr(temp_x)+","+repr(temp_y)+","+repr(0))
+			walls_file.write(","+repr(temp_x)+","+repr(temp_y)+","+repr(2.0))
+		# x.append(x[0])
+		# y.append(y[0])
+		walls_file.write(","+repr(x[0])+","+repr(y[0])+","+repr(2.0))
+		walls_file.write(","+repr(x[0])+","+repr(y[0])+","+repr(0)+"\n")
+		# walls_file.write("\n")
+		plt.plot(x,y,'b')
+		# plt.show()
+		print("first loop")
+	ind_way+=1
 print("plotAPloc(nullNode)")
 plotAPloc(nullNode)
 print("plt.show()")

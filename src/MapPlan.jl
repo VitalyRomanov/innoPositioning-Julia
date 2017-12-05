@@ -364,7 +364,7 @@ module MapPlan
       for wall in filtered_walls
           wi = wall[2]
           wl = Line(wi[:,1],wi[:,2])
-        #   println(path2d,wl)
+          # println(path2d,wl)
           ip,valid = lines_intersection(path2d,wl)
           if valid
               dist = norm(path2d.v1-ip)

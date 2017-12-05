@@ -199,7 +199,7 @@ end
 # end
 
 
-function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.])
+function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.])
 
   for ap_ind = 1:length(project.APs)
     AP = project.APs[ap_ind]
@@ -277,7 +277,7 @@ function fit_parameters(project,ap_id)
   # initial value for pathloss parameters
   # the firts several parameters are fixed
   # see fmin() for details
-  theta = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]
+  theta = [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]
   for (meas_ind,measur) in enumerate(measurements)
     x = MapBuilder.signal_paths_info(measur.location[:],
                                 im_tree,
@@ -295,7 +295,7 @@ function fit_parameters(project,ap_id)
   theta,min_val = fmin(theta,X,Y)
   # divide cost function by the number of observations
   rms_error = sqrt(min_val/sum(map(i->length(Y[i]),1:length(Y))))
-  println("\nRMS $(rms_error); Optimal Parameters:\nGain: $(theta[4])\nAttenuation exponent: $(-theta[5])\nReflection coefficient: $(theta[6])\nTransmission coefficient: $(theta[7])\n")
+  println("\nRMS $(rms_error); Optimal Parameters:\nGain: $(theta[4])\nAttenuation exponent: $(theta[5])\nReflection coefficient: $(theta[6])\nTransmission coefficient: $(theta[7])\n")
   #calculate estimated signal strength using fit parameters
   mean_rssi = map(i->10*log10(sum(10.^(X[i]*theta/10))),1:length(X))
 
@@ -310,10 +310,16 @@ end
 function fmin(theta,X,Y)
   # pos-1 parameters are left from the optimization procedure
   const pos = 4
+  # theta = [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]
+
+  lower = [1,1,1,-30.,-4.,-20,-40]
+  upper = [1,1,1,30.,-2.,-2,-2]
   cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2),1:length(X)))
   # cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2)/length(Y[i]),1:length(X)))
-  res = optimize(cost,theta[pos:7],LBFGS())
+  res = optimize(cost, theta[pos:7], lower[pos:7], upper[pos:7], Fminbox{LBFGS}())
+  # res = optimize(cost,theta[pos:7],LBFGS())
   return [theta[1:pos-1];Optim.minimizer(res)],Optim.minimum(res)
+
 end
 
 
