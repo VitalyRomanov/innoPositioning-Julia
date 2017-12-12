@@ -10,11 +10,13 @@ module MapPlan
   mutable struct mapPlan
     walls::Array{Wall3D}
     limits::Array{Int}
+    sp2d_size::Array{Int}
     index::PBSM.Pbsm
     index2d
     vis_matr::Array{Bool}
   end
 
+  mapPlan(walls,limits,index,index2d,vis_matr) = mapPlan(walls,limits,limits[1:2,2]-limits[1:2,1],index,index2d,vis_matr)
 
   function query_walls(path::Line,wall_index)
     return PBSM.probe(wall_index,line2mbr(path))

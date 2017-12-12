@@ -28,7 +28,7 @@ end
 
 
 function plot_map(ssm,project,map_ind,filename)
-    rssi_min = -100.
+    rssi_min = -200.
     rssi_max = maximum(ssm)
 
     println("Minimum: $(rssi_min)   Maximum: $(rssi_max)")
