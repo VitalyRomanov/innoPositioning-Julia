@@ -184,7 +184,7 @@ end
 # end
 
 
-function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.])
+function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.], from_dump = false)
 
   for ap_ind = 1:length(project.APs)
     AP = project.APs[ap_ind]
@@ -195,20 +195,30 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
 
     ssm = nothing
 
-    if !isfile(ssm_path)
-      println("Creating visibility index for AP $(ap_ind)")
-      ap_vis = MapPlan.apVisibIndex(project.plan,AP)
+    if from_dump
+        if !isfile(dump_path)
+            println("No dump found!")
+        else
+            ssm = load_from_dump(project.plan,dump_path,parameters)
+        end
+    end
 
-      println("Creating image tree for AP $(ap_ind)")
-      im_tree = ImageTree.buildImageTree(project.plan,
-                                            AP,
-                                            ap_vis)
-      println("Calculating coverage map for AP $(ap_ind)")
-      ssm = MapBuilder.caclulate_signal_strength_matrix(im_tree,
+    if !isfile(ssm_path)
+        if ssm==nothing
+          println("Creating visibility index for AP $(ap_ind)")
+          ap_vis = MapPlan.apVisibIndex(project.plan,AP)
+
+          println("Creating image tree for AP $(ap_ind)")
+          im_tree = ImageTree.buildImageTree(project.plan,
+                                                AP,
+                                                ap_vis)
+          println("Calculating coverage map for AP $(ap_ind)")
+          ssm = MapBuilder.caclulate_signal_strength_matrix(im_tree,
                                                         project.plan,
                                                         parameters,
                                                         dump_path)
-      JLD.save(ssm_path,"ssm",ssm)
+        end
+        JLD.save(ssm_path,"ssm",ssm)
     end
 
     println("Coverage map for AP $(ap_ind) is ready")
@@ -226,6 +236,46 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
 
 
 end
+
+
+function load_from_dump(plan,dump_path,params)
+    limits = plan.limits
+    size1 = limits[1,2]-limits[1,1]; size2 = limits[2,2]-limits[2,1];
+    ssm = zeros(Float64,size1,size2)-3080.
+
+    dump_ssm = readtable(dump_path, header=false)
+
+    loc = (0.,0.); locs = []; l_paths = [];
+
+    for row_id = 1:size(dump_ssm,1)
+        c_loc = (dump_ssm[row_id,1],dump_ssm[row_id,2])
+        if c_loc != loc
+            loc = c_loc
+            push!(locs,loc)
+            push!(l_paths,0)
+        end
+        l_paths[end] += 1
+    end
+
+    common = sum(params[1:4])
+    space_par = params[5:end]
+
+    for l_id = 1:length(locs)
+        start = sum(l_paths[1:l_id])-l_paths[l_id] + 1
+        p_dump = Array(dump_ssm[start:start+l_paths[l_id]-1,3:end])
+        in_build = find(x->x<2,p_dump[:,3]) # filter paths that go through buildings
+        if length(in_build)==0 continue end # skip if no valid paths
+        p_dump = p_dump[in_build,:]
+        p_dump[:,1] = 10.0*log10.(p_dump[:,1])
+        power = 10*log10(sum(10.^( (p_dump*space_par + common) / 10.))  + 1.0e-308)
+        loc = locs[l_id]
+        ssm[loc[1],loc[2]] = power
+    end
+
+    return ssm
+end
+
+
 
 # function recalculate_coverage_map(project::CMProject,ap_ind;parameters = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.])
 #   project.ssms[ap_ind] = MapBuilder.caclulate_signal_strength_matrix(project.ssms[ap_ind], project.image_trees[ap_ind],project.plan,parameters)

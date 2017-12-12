@@ -57,11 +57,13 @@ else
   println("Unknown choice")
 end
 
-MapVis.visualizeWallVis(proj)
+# MapVis.visualizeWallVis(proj)
 
-params = CoverageMapProject.fit_parameters(proj,1)
-# params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
-CoverageMapProject.calculate_coverage_map(proj,parameters = params)
+params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
+if params == []
+    params = CoverageMapProject.fit_parameters(proj,1)
+end
+CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
 
 
 # space = project.plan.limits[1:2,:]
