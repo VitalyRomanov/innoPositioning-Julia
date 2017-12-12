@@ -184,7 +184,7 @@ function plot_fit_error(project,dist,mean_rssi,ap_id,measur)
       annotate!(dist[elem]*1.01,mean(measur[elem].rssi)*1.01,text("$elem"),subplot = 2)
     end
 
-    savefig("$(project.path_init_data)/all_it_takes.svg")
+    savefig("$(project.path_init_data)/all_it_takes_$(ap_id).svg")
 end
 
 end

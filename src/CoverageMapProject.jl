@@ -34,16 +34,16 @@ type CMProject
 end
 
 
-function read_measurements(path)
+function read_measurements(path, ap_id)
   # import empirical RSSI measurements from disk
-  measur_avail = isdir("$(path)/loc")
+  measur_avail = isdir("$(path)/loc/$(ap_id)")
   measur = Array{Measurement}(0)
   if measur_avail
-    for file in readdir("$(path)/loc")
+    for file in readdir("$(path)/loc/$(ap_id)")
       if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
         loc_id = parse(Int,file[1:end-4])
-        location = mean(Array(readtable("$(path)/loc/$(file)",header = false)),1)
-        rssi = Array(readtable("$(path)/rssi/$(file)",header = false)[:,2])
+        location = mean(Array(readtable("$(path)/loc/$(ap_id)/$(file)",header = false)),1)
+        rssi = Array(readtable("$(path)/rssi/$(ap_id)/$(file)",header = false)[:,2])
         push!(measur,Measurement(loc_id,location[:],rssi))
       end
     end
@@ -51,6 +51,7 @@ function read_measurements(path)
 
   return measur_avail,measur
 end
+
 
 function read_measur(path)
   measur_avail = isdir("$(path)/rssi")
@@ -68,6 +69,7 @@ function read_measur(path)
 
   return measur_avail,measur
 end
+
 
 function create_project(init_path,name;secSize = 30.)
   aps = load_aps("$(init_path)/aps.txt")
@@ -258,7 +260,7 @@ function fit_parameters(project,ap_id)
   X = Array{Array{Float64}}(0)
   Y = Array{Array{Float64}}(0)
 
-  measur_avail,measurements = read_measurements(project.path_init_data)
+  measur_avail,measurements = read_measurements(project.path_init_data, ap_id)
   if ~measur_avail
       println("No measurements available")
       return
@@ -278,7 +280,10 @@ function fit_parameters(project,ap_id)
   # the firts several parameters are fixed
   # see fmin() for details
   theta = [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]
+  println(" count measur =  $(length(measurements))")
+
   for (meas_ind,measur) in enumerate(measurements)
+    println("measur =  $(meas_ind), $(measur.rssi)")
     x = MapBuilder.signal_paths_info(measur.location[:],
                                 im_tree,
                                 project.plan)
@@ -300,7 +305,7 @@ function fit_parameters(project,ap_id)
   mean_rssi = map(i->10*log10(sum(10.^(X[i]*theta/10))),1:length(X))
 
   MapVis.plot_fit_error(project,dist,mean_rssi,ap_id,measurements)
-
+  println("theta = $(theta)")
   return theta
 end
 
@@ -311,7 +316,6 @@ function fmin(theta,X,Y)
   # pos-1 parameters are left from the optimization procedure
   const pos = 4
   # theta = [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]
-
   lower = [1,1,1,-30.,-4.,-20,-40]
   upper = [1,1,1,30.,-2.,-2,-2]
   cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2),1:length(X)))

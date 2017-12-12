@@ -4,7 +4,7 @@ push!(LOAD_PATH, "$(current_path)/src")
 using CoverageMapProject
 using JLD
 using MapVis
-
+using runSearchPath
 # defines the grid size for PBSM index
 sectorSize = 30.
 
@@ -37,7 +37,7 @@ end
 
 if resp==1
   print("Enter new project name: ")
-  name = readline()[1:end-1]
+  name = readline()[1:end]
   print("Enter path for the project: ")
   load_path = strip(readline())
   # name = "test8"
@@ -54,28 +54,33 @@ elseif resp==2
 elseif resp==3
   proj = CoverageMapProject.load_session()
 # elseif resp==4
-#   print("Enter existing first project location :")
-#   proj_path = strip(readline())
-#   proj = CoverageMapProject.load_project(proj_path)
-#   CoverageMapProject.save_session(proj_path)
-#   print("Enter existing second project location :")
-#   proj_path_2 = strip(readline())
-#   proj_2 = CoverageMapProject.load_project(proj_path_2)
-#   CoverageMapProject.save_session(proj_path_2)
-#   params_1 = CoverageMapProject.fit_parameters(proj,1)
-#   params_2 = CoverageMapProject.fit_parameters(proj_2,2)
-#   CoverageMapProject.calculate_coverage_map(proj,parameters = params)
+  # print("Enter existing first project location :")
+  # proj_path = strip(readline())
+  # proj = CoverageMapProject.load_project(proj_path)
+  # CoverageMapProject.save_session(proj_path)
+  # print("Enter existing second project location :")
+  # proj_path_2 = strip(readline())
+  # proj_2 = CoverageMapProject.load_project(proj_path_2)
+  # CoverageMapProject.save_session(proj_path_2)
+  # params_1 = CoverageMapProject.fit_parameters(proj,1)
+  # params_2 = CoverageMapProject.fit_parameters(proj_2,2)
+  # CoverageMapProject.calculate_coverage_map(proj,parameters = params)
 else
   println("Unknown choice")
 end
 
 MapVis.visualizeWallVis(proj)
 
-params = CoverageMapProject.fit_parameters(proj,1)
-# params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
-CoverageMapProject.calculate_coverage_map(proj,parameters = params)
+for ap_ind=1:length(proj.APs)
+  println("ap_ind = $(ap_ind)")
+  params = CoverageMapProject.fit_parameters(proj,ap_ind)
+  CoverageMapProject.calculate_coverage_map(proj,parameters = params)
+  # params = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-100.]
+  # @time someFunction
+end
 
-
+runSearchPath.init(proj)
+println("Good")
 # space = project.plan.limits[1:2,:]
 # grid_size = 1.
 # grid = convert(Array{Int},floor.((space[:,2] - space[:,1]) / grid_size))
