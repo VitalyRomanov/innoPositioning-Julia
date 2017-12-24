@@ -79,15 +79,33 @@ end
 #   # @time someFunction
 # end
 
+# params = []
+# params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
+# if params == []
+#     params = CoverageMapProject.fit_parameters(proj,1)
+# end
+# CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
 
-params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
-if params == []
-    params = CoverageMapProject.fit_parameters(proj,1)
+
+aps = runSearchPath.readAPs()
+# rssi_records = LocTrack.RssiRecord[]
+# rssi_records.rssi, rssi_records.ap, rssi_records.t = readingClientTracking(aps, "$(proj.path_init_data)/clients","")
+est_path = []
+rssi_rec = []
+data_folder = "$(proj.path_init_data)/clients"
+data_path_folder = "$(proj.path_init_data)/clients_jld"
+for (fileind,file) in enumerate(readdir(data_path_folder))
+  rssi, path = JLD.load("$(proj.path_init_data)/clients_jld/client_$(fileind).jld","signalrecords","estimatedpath")
+  push!(est_path, path)
+  push!(rssi_rec, rssi)
 end
-CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
 
 
-runSearchPath.init(proj)
+if length(est_path)==0
+  est_path = runSearchPath.readingClientTracking(aps, data_folder , proj)
+end
+MapVis.plot_paths(proj,[est_path])
+# MapVis.plot_paths(proj,real_measurements[2],[est_path],true,false)
 println("Good")
 # space = project.plan.limits[1:2,:]
 # grid_size = 1.

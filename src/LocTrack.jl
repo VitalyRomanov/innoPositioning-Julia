@@ -207,8 +207,8 @@ module LocTrack
     g_size = 1. # only one grid resolution is currently supported
     s_size = plan.sp2d_size
     limits = plan.limits
-
-    loc = grid2coord(fold_index(state,plan),g_size)
+    # println("fold_index = $(fold_index(state,plan))")
+    loc = grid2coord(fold_index(state,plan),plan)
     # create strided distance vector for further calculations
     # create these once outside this function
     dx = collect( limits[1,1]:1:(limits[1,2]-1) ) * g_size + g_size/2
@@ -267,32 +267,32 @@ module LocTrack
     return prob[:] # should do normalization?
   end
 
-  # function combine_trellis(trellis_part,velocity_part,p_transition,v_transition,path_back,state)
-  #   # vectorization possible?
-  #   for ss in 1:1:length(trellis_part)
-  #     if p_transition[ss] > trellis_part[ss]
-  #       trellis_part[ss] = p_transition[ss]
-  #       velocity_part[ss,:] = v_transition[ss,:]
-  #       path_back[ss] = state
-  #     end
-  #   end
-  #   return trellis_part,velocity_part,path_back
-  # end
-
-  function combine_logtrellis(temp_trellis::Array{Float64},temp_velocity::Array{Float64})
-    g_size = size(temp_trellis,1)
-    trellis = zeros(Float64,g_size)
-    velocity = zeros(Float64,g_size,2)
-    path_back = zeros(Int32,g_size)
-    (~,maxind) = findmax(temp_trellis,1)
-
-    trellis = temp_trellis[maxind]
-    velocity = temp_velocity[maxind]
-    temp = ceil(maind/g_size)
-    path_back = maxind - (temp-1)*g_size
-
-    return trellis,velocity,path_back
+  function combine_trellis(trellis_part,velocity_part,p_transition,v_transition,path_back,state)
+    # vectorization possible?
+    for ss in 1:1:length(trellis_part)
+      if p_transition[ss] > trellis_part[ss]
+        trellis_part[ss] = p_transition[ss]
+        velocity_part[ss,:] = v_transition[ss,:]
+        path_back[ss] = state
+      end
+    end
+    return trellis_part,velocity_part,path_back
   end
+
+  # function combine_logtrellis(temp_trellis::Array{Float64},temp_velocity::Array{Float64})
+  #   g_size = size(temp_trellis,1)
+  #   trellis = zeros(Float64,g_size)
+  #   velocity = zeros(Float64,g_size,2)
+  #   path_back = zeros(Int32,g_size)
+  #   (~,maxind) = findmax(temp_trellis,1)
+  #
+  #   trellis = temp_trellis[maxind]
+  #   velocity = temp_velocity[maxind]
+  #   temp = ceil(maind/g_size)
+  #   path_back = maxind - (temp-1)*g_size
+  #
+  #   return trellis,velocity,path_back
+  # end
 
 
 
@@ -346,15 +346,20 @@ module LocTrack
     # This is used to initialize probabilities in trellis
     c_rssi = signals[1].rssi
     c_ap_id = signals[1].ap
+    # println("before rssiLogDist")
     p_rssi = rssiLogDist(c_rssi,
                           signal_map[c_ap_id]) # the value is boosted by exp(100)
 
     # Combines initial probabilities
+    # println("combine_logprob")
+    # @time
     trellis[:,1] = combine_logprob(p_rssi,init_step) # values sum to 1e100?
 
 
     # Start processing rssi signals
+    # println("for i = 1:1:length(signals)-1")
     for i = 1:1:length(signals)-1
+      # println("viterby Start processing rssi signals $(i)")
       # whenever there is no time difference between consecutive measurements,
       # assume that we did not change location
       dt = signals[i+1].t - signals[1].t
@@ -365,6 +370,7 @@ module LocTrack
         continue
       end
 
+      # println("before rssiLogDist - Location probabilities based on rssi")
       # Location probabilities based on rssi
       c_rssi = signals[i+1].rssi
       c_ap_id = signals[i+1].ap
@@ -379,7 +385,7 @@ module LocTrack
     #           " is expected\n")
     #   end
 
-
+      # println("before for state in 1:1:g_size")
       for state in 1:1:g_size
         # iterate over states in trellis for exhaustive optimum search
 
@@ -402,8 +408,10 @@ module LocTrack
         #             " is expected\n")
         #     end
         #   end
+          # println("before combine_logprob")
 
           cp = combine_logprob(p_rssi,p_transition)
+          # println("before combine_trellis")
 
           # slicing creates new arrays -> performance issue
           trellis[:,2],velocity[:,:,2],path_back[:,i+1] = combine_trellis(trellis[:,2],
@@ -433,7 +441,7 @@ module LocTrack
       velocity[:,:,2] = zeros(Float64,g_size,2) # creating new array -> performance issues
       # toc()
     end
-
+    # println("Allocate memory for estimated path")
     # Allocate memory for estimated path
     estimated_path = zeros(Float64,length(signals),2)
     # Find most likely path
@@ -445,9 +453,8 @@ module LocTrack
     # Propagate back to find the most likely path
     for step_ind in length(signals):-1:1
       estimated_path[step_ind,:] = grid2coord(
-                                      fold_index(step_back,spaceInfo),
-                                                  plan
-                                      )
+                                      fold_index(step_back,plan),
+                                                  plan)
       step_back = path_back[step_back,step_ind]
     end
 

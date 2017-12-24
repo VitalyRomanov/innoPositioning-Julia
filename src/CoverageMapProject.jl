@@ -375,6 +375,4 @@ function fmin(theta,X,Y)
   return [theta[1:pos-1];Optim.minimizer(res)],Optim.minimum(res)
 
 end
-
-
 end
