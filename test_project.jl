@@ -105,6 +105,22 @@ if length(est_path)==0
   est_path = runSearchPath.readingClientTracking(aps, data_folder , proj)
 end
 MapVis.plot_paths(proj,est_path)
+
+for path in est_path
+  for i=1:size(path,1)-1
+    println("for path between 2 point x1 = $(path[i,1]) and x2=$(path[i+1,1]) | y1 = $(path[i,2]) and y2=$(path[i+1,2])")
+    ds = sqrt((path[i,1]-path[i+1,1])^2 +(path[i,2]-path[i+1,2])^2 )
+    println("path = ",ds)
+    dt = rssi_rec[1][i+1].t - rssi_rec[1][i].t
+    println("time = ",dt)
+    velocity = ds/dt
+    println(" common  velocity$(i)-$(i+1) = ",velocity)
+    v = (path[i,1]-path[i+1,1]) / dt
+    println("velocity for x = $(v)")
+    println("-------------------------------------")
+
+  end
+end
 # MapVis.plot_paths(proj,real_measurements[2],[est_path],true,false)
 println("Good")
 # space = project.plan.limits[1:2,:]
