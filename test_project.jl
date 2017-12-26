@@ -104,7 +104,7 @@ end
 if length(est_path)==0
   est_path = runSearchPath.readingClientTracking(aps, data_folder , proj)
 end
-MapVis.plot_paths(proj,[est_path])
+MapVis.plot_paths(proj,est_path)
 # MapVis.plot_paths(proj,real_measurements[2],[est_path],true,false)
 println("Good")
 # space = project.plan.limits[1:2,:]

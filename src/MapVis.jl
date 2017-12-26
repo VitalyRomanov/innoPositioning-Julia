@@ -103,14 +103,14 @@ function plot_paths(project, real_path, est_path, point = false, real = false)
     limy = project.plan.limits[2,1]
     println("limx = $(limx) , limy = $(limy)")
     for path in est_path
-      for i=1:length(path)-1
-        plot!([path[i][1],path[i+1][1]]-limx,[path[i][2],path[i+1][2]]-limy,linecolor=:red, subplot = 1)
+      for i=1:size(path,1)-1
+        plot!([path[i,1],path[i+1,1]]-limx,[path[i,2],path[i+1,2]]-limy,linecolor=:red, subplot = 1)
       end
     end
       for path in est_path
-        for i=1:length(path)-1
-          plot!([path[i][1]-limx],[path[i][2]-limy],markershape=:diamond,markercolor=:red,subplot = 1)
-          annotate!((path[i][1]-limx),(path[i][2]-limy)+2*7/10,text("$i",7),subplot = 1)
+        for i=1:size(path,1)
+          plot!([path[i,1]-limx],[path[i,2]-limy],markershape=:diamond,markercolor=:red,subplot = 1)
+          annotate!((path[i,1]-limx),(path[i,2]-limy)+2*7/10,text("$i",7),subplot = 1)
         end
       end
     for map_ind=1:length(project.APs)
