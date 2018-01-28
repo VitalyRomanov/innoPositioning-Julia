@@ -69,7 +69,8 @@ else
   println("Unknown choice")
 end
 
-# MapVis.visualizeWallVis(proj)
+
+MapVis.visualizeWallVis(proj)
 
 # for ap_ind=1:length(proj.APs)
 #   println("ap_ind = $(ap_ind)")
@@ -79,15 +80,47 @@ end
 #   # @time someFunction
 # end
 
-# params = []
-# params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
-# if params == []
-#     params = CoverageMapProject.fit_parameters(proj,1)
-# end
-# CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
+params = []
+params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]    #better than another but not good
+# params = [147.55,-20*log10(2.4e9),10.,-0.,-3.,-9.51,-41.14]    #not good
+# params = [147.55,-20*log10(2.4e9),20.,-0.,-3.,-9.51,-41.14]    # badly
+# params =  [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]    # very bad
+# params =  [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]    #bad
+params = [147.55, -187.604, 20.0, -13.0961, -2.0, -2.0, -51.0]
+# params =  [147.55,-20*log10(2.4e9),10.,-12.200322140324198,-1.1518270170732752,-13.372525638973702,-12.]    #bad
+# params =  [147.55,-20*log10(2.4e9),10.,-12.200322140324198,-1.1518270170732752,-13.372525638973702,-100.]    #bad
+if params == []
+    params = CoverageMapProject.fit_parameters(proj)
+end
+
+# params = [147.55, -187.604, 10.0, -3.09613, -2.0, -2.0, -21.0] #for second AP bad result
+# params = [147.55, -187.604, 20.0, -13.0961, -2.0, -2.0, -21.] #Second version for second AP bad result
+# Parameter candidate [147.55, -187.604, 10.0, 2.2472, -2.29454, -3.09633, -21.0] with cost 8.572547735642075 for two Ap bad result
+CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
 
 
-aps = runSearchPath.readAPs()
+ssm = runSearchPath.readSSM(proj)
+ssm2 = JLD.load("$(proj.path_init_data)/ssm_1.jld","ssm")
+K = 50
+for i=1:100
+  estim_path = []
+  real_path = []
+   @time path, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, proj.APs[length(proj.APs)][1:2,1] )
+   @time ep,~ = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
+   push!(estim_path, ep)
+   push!(real_path, path)
+   MapVis.plot_paths(ssm2', proj, real_path, estim_path, true, true, i)
+   error = sqrt.(sum(((path-ep).^2),2))
+   common_error = sum(sqrt.(sum(((path-ep).^2),2)))/10
+   println("Error of $(i) itteration = $(common_error)")
+   save("$(proj.path_init_data)/clients_jld/client_$(K)_$(i).jld", "signalrecords", signal,"realpath",path,"estimatedpath", ep, "error", error, "commonerror", common_error)
+   # end
+ end
+
+
+
+
+# aps = runSearchPath.readAPs()
 # rssi_records = LocTrack.RssiRecord[]
 # rssi_records.rssi, rssi_records.ap, rssi_records.t = readingClientTracking(aps, "$(proj.path_init_data)/clients","")
 est_path = []
@@ -102,9 +135,14 @@ end
 
 
 if length(est_path)==0
-  est_path = runSearchPath.readingClientTracking(aps, data_folder , proj)
+  # est_path = runSearchPath.readingClientTracking(aps, data_folder , proj)
+  est_path = runSearchPath.readingBasicTracking(data_folder , proj)
 end
 MapVis.plot_paths(proj,est_path)
+
+
+rssi, path_not = JLD.load("$(proj.path_init_data)/clients_jld/client_1.jld","signalrecords","estimatedpath")
+push!(rssi_rec, rssi)
 
 for path in est_path
   for i=1:size(path,1)-1
@@ -169,3 +207,12 @@ println("Good")
 # traj = []
 # traj,~ = LocTrack.estimate_path_viterbi(signalsOfRSSI, [ssm], spaceInfo)
 # pths = [ [ traj[i,1],traj[i,2] ] for i=1:size(traj,1) ]
+ function synthetic_test()
+
+for i in 10
+   ssm = runSearchPath.readSSM(proj)
+   path, signal = LocTrack.path_generation(LocTrack.acelerationDist, 10, ssm, proj.plan, proj.APs[length(proj.APs)][1:2,1] )
+   est_path = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
+   MapVis.plot_paths(proj, path, est_path, true, real = true, i)
+ end
+ end

@@ -144,7 +144,8 @@ end
   end
 
 
-  function readingClientTracking(aps::Dict,data_folder,project)
+  function readingClientTracking(data_folder,project)
+    aps = readAPs()
     ssm = readSSM(project)
     estim_path = []
     for (fileind,file) in enumerate(readdir(data_folder))
@@ -157,6 +158,7 @@ end
       println("Converting...")
       t = convertTimeStamp(timestamps)
       println("Checking data...")
+
       if(length(rssi)==length(t) && length(rssi)==length(ap) && length(t)==length(ap))
         println("it's ok...")
         for i=1:length(rssi)
@@ -169,8 +171,8 @@ end
     println("rssi_records = ", rssi_records)
     println("start estimate path with viterbi")
     @time ep,~ = estimate_path_viterbi(rssi_records, ssm, project.plan )
-    println("end estimate path with viterbi")
-    println("path = ", ep)
+    # println("end estimate path with viterbi")
+    # println("path = ", ep)
     push!(estim_path, ep)
 
     println("Saving for client $(file)")
@@ -188,11 +190,88 @@ return estim_path
 end
 
 
+function readingBasicTracking(data_folder,project)
+  ssm = readSSM(project)
+  estim_path = []
+  for (fileind,file) in enumerate(readdir(data_folder))
+    rssi_records = LocTrack.RssiRecord[]
+    println("Reading file $(file)")
+    client = readtable("$(data_folder)/$(file)",header = false)
+    println("Formatting...")
+    rssi, ap, t = getBasicRecords(client)
+    # println("Converting...")
+    # t = convertTimeStamp(timestamps)
+    println("Checking data...")
+
+    if(length(rssi)==length(t) && length(rssi)==length(ap) && length(t)==length(ap))
+      println("it's ok...")
+      for i=1:length(rssi)
+        push!(rssi_records, LocTrack.RssiRecord(rssi[i],ap[i],t[i]))
+      end
+    end
+    # push!(rssi_records, LocTrack.RssiRecord(rssi,ap,t))
+    # return rssi_records, time, ap
+        # rssi_records
+  println("rssi_records = ", rssi_records)
+  println("start estimate path with viterbi")
+  @time ep,~ = estimate_path_viterbi(rssi_records, ssm, project.plan )
+  # println("end estimate path with viterbi")
+  # println("path = ", ep)
+  push!(estim_path, ep)
+
+  println("Saving for client $(file)")
+  save("$(project.path_init_data)/clients_jld/client_$(fileind).jld", "signalrecords", rssi_records,"estimatedpath",ep)
+  # save("$(current_path)/res/paths/client_$(fileind).jld", "signalrecords", signal_records,"estimatedpath",ep,"timestamps", time)
+end
+return estim_path
+end
+
+
+function predprocessing(rssi_p,ap_p,t_p)
+rssi = []
+ap = []
+t = []
+loc_rssi = []
+loc_ap = []
+loc_t = []
+  for i=1:length(rssi_p)
+    if rssi_p[i]!=0
+      push!(rssi,rssi_p[i])
+      push!(ap,ap_p[i])
+      push!(t,t_p[i])
+    end
+  end
+  # for i=1:length(rssi)
+    # println("RSSI = $(rssi[i]) \t ap = $(ap[i]) \t time = $(t[i])")
+  # end
+  for i=2:length(rssi)
+    if t[i]!=t[i-1]
+      push!(loc_rssi,rssi[i])
+      push!(loc_ap,ap[i])
+      push!(loc_t,t[i])
+    elseif t[i]==t[i-1] && ap[i]==ap[i-1]
+      push!(loc_rssi,(rssi[i]+rssi[i-1])/2)
+      push!(loc_ap,ap[i])
+      push!(loc_t,t[i])
+      i+1
+    end
+  end
+  return loc_rssi, loc_ap, loc_t
+end
+
+
 function get_records(client)
   rssi = Array(client[:,2])
   timestamps = Array{String}(client[:,5])
   ip = Array(client[:,3])
   return rssi,ip,timestamps
+end
+
+function getBasicRecords(client)
+  rssi = Array(client[:,2])
+  timestamps = Array(client[:,3])
+  ap = Array(client[:,1])
+  return rssi,ap,timestamps
 end
 
 function convertTimeStamp(timestamps::Array{String})

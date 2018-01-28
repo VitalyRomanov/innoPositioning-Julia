@@ -130,8 +130,81 @@ module LocTrack
 
 
   ####### Project functions
+  # type SpaceInfo
+  #  -    space::Array{Int}
+  #  -    grid::Array{Int}
+  #  -    grid_size::Float64
+  #  -  end
+ #  function getSpaceInfo(space,grid_size=1.)
+ # +  #   grid = Int.(floor.(space/grid_size))
+ # +  #   return SpaceInfo(space,grid,grid_size)
+ #    # end
+ # signal_map::Array{Array{Float64}},
+ # plan;
+ # seed = [-1. -1.],
+ # grid_space_size = spaceInfo.grid[1]*spaceInfo.grid[2] # total number of cells in the grid
+ # +    g_size = prod(plan.sp2d_size) # total number of cells in the grid
+# grid_size=1.
+ function path_generation(distribution, path_lenght,
+                          signal_map,
+                          plan,
+                          seed = [-1. -1.])
+  # println("Start path generation")
+  path, signals = distribution(path_lenght, signal_map, plan, seed)
+  # println("Finish path generation")
 
-  # function path_generation(seed,path_lenght,signal_map,spaceInfo, dt = 1.)
+  return path,signals
+end
+
+function acelerationDist(path_lenght,
+                         signal_map,
+                         plan,
+                         seed,
+                         dt = 1.)
+  # seed : initial location
+  # path_lenght : --||--
+  # signal_map : signal strength matrix
+  # dt :
+  # println("Start acelerationDist")
+  t = dt
+  path = zeros(Float64,path_lenght,2) # stores generated path here
+  # rssi = zeros(Float64,path_lenght,1)
+  signals  = Array(RssiRecord,path_lenght)
+  v = zeros(Float64,2,1)
+  path[1,:] = seed
+
+  index = coord2grid(path[1,:],plan)
+  # print(index)
+  # rssi[1] = randn()+signal_map[index[1],index[2]]
+  rssi = randn()+signal_map[1][index[1],index[2]]
+  signals[1] = RssiRecord(rssi,1,1.)
+  # println("Start loop to path_lenght")
+  for i in 2:1:path_lenght
+    valid_sample = false
+    s = seed
+    a = seed
+    t+=1
+    # println("Start loop !valid_sample")
+    while !valid_sample
+      a = randn(2,1) #0.5487618458
+      s = path[i-1,:] + v*dt + a*dt^2/2
+      # println("a =$(a) & v=$(v) & s = $(s)")
+      # if (s[1]>0) && (s[2]>0) && (s[1]<spaceInfo.space[1,1]) && (s[2]<spaceInfo.space[2,1])
+      if prod(s.>0) && prod(s.>plan.limits[1:2,1]) && prod(s.<plan.limits[1:2,2])
+        valid_sample = true
+      end
+    end
+    # print("Finish loop valid simple")
+    path[i,:] = s
+    v += a*dt
+    index = coord2grid(path[i,:],plan)
+    rssi = randn()+signal_map[1][index[1],index[2]]
+    signals[i] = RssiRecord(rssi,1,t)
+  end
+  return path,signals
+end
+
+  #  function path_generation(seed,path_lenght,signal_map,spaceInfo, dt = 1.)
   #   # seed : initial location
   #   # path_lenght : --||--
   #   # signal_map : signal strength matrix
@@ -142,6 +215,7 @@ module LocTrack
   #   signals  = Array(RssiRecord,path_lenght)
   #   v = zeros(Float64,2,1)
   #   path[1,:] = seed
+  #
   #   index = coord2grid(seed,spaceInfo.grid_size)
   #   # print(index)
   #   # rssi[1] = randn()+signal_map[index[1],index[2]]
