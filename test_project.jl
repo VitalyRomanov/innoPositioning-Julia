@@ -37,7 +37,7 @@ end
 
 if resp==1
   print("Enter new project name: ")
-  name = readline()[1:end-1]
+  name = readline()
   print("Enter path for the project: ")
   load_path = strip(readline())
   # name = "test8"
@@ -60,11 +60,17 @@ end
 # MapVis.visualizeWallVis(proj)
 
 params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
+# params = []
 if params == []
-    params = CoverageMapProject.fit_parameters(proj,1)
+    params = CoverageMapProject.fit_parameters(proj)
 end
 CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
 
+# ssms = CoverageMapProject.load_ssms(proj)
+#
+# clients = CoverageMapProject.load_clients(proj)
+#
+# CoverageMapProject.restore_paths(clients,ssms,proj)
 
 # space = project.plan.limits[1:2,:]
 # grid_size = 1.

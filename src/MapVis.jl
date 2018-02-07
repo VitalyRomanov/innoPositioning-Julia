@@ -72,8 +72,10 @@ function plot_paths(project,paths,mp_ind)
   limy = project.plan.limits[2,1]
 
   for path in paths
-    for i=1:length(path)-1
-      plot!([path[i][1],path[i+1][1]]-limx,[path[i][2],path[i+1][2]]-limy,linecolor=:red)
+    for i=1:size(path,1)-1
+    #   plot!([path[i][1],path[i+1][1]]-limx,[path[i][2],path[i+1][2]]-limy,linecolor=:red)
+    #   println(i)
+      plot!([path[i,1],path[i+1,1]]-limx,[path[i,2],path[i+1,2]]-limy,linecolor=:red)
     end
   end
 
@@ -87,6 +89,7 @@ end
 
 
 function visualizeWallVis(project, range = [])
+    # function serves only debugging purposes
     # if range not specified plot for all walls
     if range == []
         range = 1:length(project.plan.walls)

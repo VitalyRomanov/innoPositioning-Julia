@@ -9,6 +9,7 @@ using HDF5, JLD
 using DataFrames
 using Optim
 using MapVis
+using LocTrack
 
 
 type Measurement
@@ -33,23 +34,31 @@ type CMProject
 
 end
 
+function read_measurements(project)
+    measurs = Dict()
+    measur_path = "$(project.path_init_data)/loc/"
 
-function read_measurements(path)
+    for ap_id = 1:length(project.APs)
+        if isdir("$(measur_path)/$(ap_id)")
+            measurs[ap_id] = read_ap_measur(project.path_init_data,ap_id)
+        end
+    end
+    return measurs
+end
+
+function read_ap_measur(path, ap_id)
   # import empirical RSSI measurements from disk
-  measur_avail = isdir("$(path)/loc")
   measur = Array{Measurement}(0)
-  if measur_avail
-    for file in readdir("$(path)/loc")
+    for file in readdir("$(path)/loc/$(ap_id)")
       if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
         loc_id = parse(Int,file[1:end-4])
-        location = mean(Array(readtable("$(path)/loc/$(file)",header = false)),1)
-        rssi = Array(readtable("$(path)/rssi/$(file)",header = false)[:,2])
+        location = mean(Array(readtable("$(path)/loc/$(ap_id)/$(file)",header = false)),1)
+        rssi = Array(readtable("$(path)/rssi/$(ap_id)/$(file)",header = false)[:,2])
         push!(measur,Measurement(loc_id,location[:],rssi))
       end
     end
-  end
 
-  return measur_avail,measur
+  return measur
 end
 
 
@@ -283,58 +292,84 @@ end
 #   save_proj(project)
 # end
 
+# ============ Functions for fitting parameters ==================
 
 
-function fit_parameters(project,ap_id)
+function fit_parameters(project;n_rand_inits = 1000)#ap_id
   # X stores matrices that contain information about different signal paths
   # to a measurement point. The matrix X[i] has 7 columns (parameters) and
   # N rows (paths to the current location)
   # Y stores M observations of rssi at a measurement point
-  X = Array{Array{Float64}}(0)
-  Y = Array{Array{Float64}}(0)
+  X = Array{Array{Float64}}(0) # estimated RSSI
+  Y = Array{Array{Float64}}(0) # measured RSSI
 
-  measur_avail,measurements = read_measurements(project.path_init_data)
-  if ~measur_avail
+  measurements = read_measurements(project)
+  if length(measurements) == 0
       println("No measurements available")
       return
   end
 
-  AP = project.APs[ap_id]
-  ap_vis = MapPlan.apVisibIndex(project.plan,AP)
-  im_tree = ImageTree.buildImageTree(project.plan,
-                                        AP,
-                                        ap_vis)
-
-
-
   dist = [] #distance from meas. point to AP
 
+  for (ap_id,measur) in measurements
+    #   iterate through different AP
+    # need to build an image tree to calculate analytical signal strength
+      AP = project.APs[ap_id]
+      ap_vis = MapPlan.apVisibIndex(project.plan,AP)
+      im_tree = ImageTree.buildImageTree(project.plan,
+                                            AP,
+                                            ap_vis)
+    # iterate through measutement positions
+      for (meas_ind,m) in enumerate(measur)
+          x = MapBuilder.signal_paths_info(m.location[:],
+                                      im_tree,
+                                      project.plan)
+          paths = MapBuilder.calculate_paths(m.location[:],
+                                      im_tree,
+                                      project.plan)
+        #   MapVis.plot_paths(project,paths,meas_ind)
+          x = [ones(Float64,size(x,1),4) x]
+          push!(X,x) # add path params for measurement position meas_ind to X
+          push!(Y,m.rssi) # add empirical RSSI to Y
+          dist = [dist;norm(project.APs[ap_id]-m.location)]
+      end
+  end
+
+  # number of observations
+  n_obs = sum(map(i->length(Y[i]),1:length(Y)))
+
+  println("Trying to find optimal parameters in $(n_rand_inits) iterations")
   # initial value for pathloss parameters
   # the firts several parameters are fixed
   # see fmin() for details
+  # we change only the last three parameters as they describe the environment
+  lim_bounds = [
+        -4 -2;
+        -30 -5;
+        -50 -15
+  ]
   theta = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]
-  for (meas_ind,measur) in enumerate(measurements)
-    x = MapBuilder.signal_paths_info(measur.location[:],
-                                im_tree,
-                                project.plan)
-    paths = MapBuilder.calculate_paths(measur.location[:],
-                                im_tree,
-                                project.plan)
-    MapVis.plot_paths(project,paths,meas_ind)
-    x = [ones(Float64,size(x,1),4) x]
-    push!(X,x)
-    push!(Y,measur.rssi)
-    dist = [dist;norm(project.APs[ap_id]-measur.location)]
+  best_cost = 1e10; best_par = []
+  for i=1:n_rand_inits
+      sample_par = rand(3).*(lim_bounds[:,2]-lim_bounds[:,1]) + lim_bounds[:,1]
+      th_temp = theta;   th_temp[5:7] = sample_par
+      th_temp,min_val = fmin(theta,X,Y)
+      if min_val < best_cost
+          best_cost = min_val
+          best_par = th_temp
+          println("Parameter candidate $(best_par) with cost $(sqrt(min_val/n_obs))")
+      end
   end
 
-  theta,min_val = fmin(theta,X,Y)
+  theta = best_par
+  min_val = best_cost
   # divide cost function by the number of observations
-  rms_error = sqrt(min_val/sum(map(i->length(Y[i]),1:length(Y))))
+  rms_error = sqrt(min_val/n_obs)
   println("\nRMS $(rms_error); Optimal Parameters:\nGain: $(theta[4])\nAttenuation exponent: $(-theta[5])\nReflection coefficient: $(theta[6])\nTransmission coefficient: $(theta[7])\n")
   #calculate estimated signal strength using fit parameters
   mean_rssi = map(i->10*log10(sum(10.^(X[i]*theta/10))),1:length(X))
 
-  MapVis.plot_fit_error(project,dist,mean_rssi,ap_id,measurements)
+  # MapVis.plot_fit_error(project,dist,mean_rssi,ap_id,measurements)
 
   return theta
 end
@@ -351,5 +386,69 @@ function fmin(theta,X,Y)
   return [theta[1:pos-1];Optim.minimizer(res)],Optim.minimum(res)
 end
 
+
+function load_ssms(project)
+    ssms = Array{Array{Float64}}(0)
+    for ap_ind = 1:length(project.APs)
+        push!(ssms,JLD.load("$(project.path_init_data)/ssm_$(ap_ind).jld","ssm"))
+    end
+    return ssms
+end
+
+function load_clients(project)
+    records = []
+    for file in readdir("$(project.path_init_data)/clients")
+        if file[end-2:end] != "csv" continue end
+        client_path = "$(project.path_init_data)/clients/$(file)"
+        push!(records,(file[1:end-4],load_client(client_path)))
+    end
+    return records
+end
+
+function load_client(path)
+    Record = LocTrack.RssiRecord
+    rssi = :rssilog_rssi
+    ap_id = :rssilog_antenna
+    time = :rssilog_timestamp
+    readings = Array{Record}(0)
+
+    client = readtable(path)
+    n_rec = size(client,1)
+    if n_rec>0
+        push!(readings,Record(client[1,rssi],client[1,ap_id],client[1,time]))
+    end
+    last_t = client[1,time]
+    if n_rec>1
+        for i=2:n_rec
+            if client[i,time]-last_t > 0 && client[i,rssi] < -10
+                push!(readings,
+                    Record(client[i,rssi],client[i,ap_id],client[i,time]))
+                last_t = client[i,time]
+            end
+        end
+    end
+    return readings
+end
+
+
+function restore_paths(clients,ssms,project)
+    paths_path = "$(project.path_init_data)/paths"
+    mkpath(paths_path)
+    # clients = clientz[7:8]
+    for (client_fn,records) in clients
+        print("\rProcessign $(client_fn)")
+        path = LocTrack.estimate_path_viterbi(
+                    records,
+                    ssms,
+                    project.plan
+        )
+        writetable("$(paths_path)/$(client_fn).csv",
+                    convert(DataFrame,path),
+                    header=false)
+        MapVis.plot_paths(project,[path[:,1:2]],client_fn)
+    end
+    println("")
+
+end
 
 end
