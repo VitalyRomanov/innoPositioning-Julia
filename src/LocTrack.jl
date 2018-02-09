@@ -6,6 +6,7 @@ module LocTrack
   using Distributions
 
   const rssiSigma = 1 # rssi noise stdev
+  const sqrt_2 = sqrt(2)
 
   export getSpaceInfo,estimate_path_viterbi,RssiRecord,pmodel_space,path_to_rssi,path_generation
 
@@ -211,8 +212,8 @@ module LocTrack
       g_size = plan.gcell_size # grid resolution
       s_size = plan.sp2d_size
       limits = plan.limits
-      global x_grid = collect( limits[1,1]:g_size:(limits[1,2]-1) )
-      global y_grid = collect( limits[2,1]:g_size:(limits[2,2]-1) )
+      global x_grid = collect( limits[1,1]:g_size:(limits[1,2]-1) ) + g_size/2
+      global y_grid = collect( limits[2,1]:g_size:(limits[2,2]-1) ) + g_size/2
   end
 
 
@@ -282,11 +283,11 @@ module LocTrack
     loc = grid2coord(fold_index(state,plan),plan)
     # create strided distance vector for further calculations
     # create these once outside this function
-    dx = x_grid * g_size + g_size/2
-    dy = y_grid * g_size + g_size/2
+    dx = x_grid #  * g_size + g_size/2
+    dy = y_grid #  * g_size + g_size/2
     # need support for rectangular space
-    # x = lognormpdf(dx,loc[1]+v[1]*dt,dt^2/2)
-    # y = lognormpdf(dy,loc[2]+v[2]*dt,dt^2/2)
+    # x = lognormpdf(dx,loc[1]+v[1]*dt,dt/sqrt_2)
+    # y = lognormpdf(dy,loc[2]+v[2]*dt,dt/sqrt_2)
     x = transProbCoord(dx,loc[1],v[1],dt)
     y = transProbCoord(dy,loc[2],v[2],dt)
 
