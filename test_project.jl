@@ -5,6 +5,7 @@ using CoverageMapProject
 using JLD
 using MapVis
 using runSearchPath
+using LocTrack
 # defines the grid size for PBSM index
 sectorSize = 30.
 
@@ -18,6 +19,33 @@ if isfile("last_session.jld")
 end
 
 
+# K = 10
+# signalrecords = []
+# realpath = []
+# estimatedpath = []
+# error = []
+# commonerror = []
+# path = "/Users/NIKMC/Project/MasterThesis/innoPositioning-Julia/test_out6_2AP/clients_jld/"
+# for i=1:1
+#   signal, real_path, ep, err, common_error = JLD.load("$(path)client_$(K)_$(i).jld","signalrecords","realpath","estimatedpath","error","commonerror")
+#   push!(signalrecords,signal)
+#   push!(realpath,real_path)
+#   push!(estimatedpath,ep)
+#   push!(error,err)
+#   push!(commonerror,common_error)
+#   println(commonerror[i])
+# end
+
+# signalrecords = []
+# realpath = []
+# estimatedpath = []
+# error = []
+# commonerror = []
+# push!(signalrecords,signal)
+# push!(realpath,real_path)
+# push!(estimatedpath,ep)
+# push!(error,err)
+# push!(commonerror,common_error)
 
 resp = 0
 while !(resp in 1:options)
@@ -69,7 +97,6 @@ else
   println("Unknown choice")
 end
 
-
 MapVis.visualizeWallVis(proj)
 
 # for ap_ind=1:length(proj.APs)
@@ -81,12 +108,12 @@ MapVis.visualizeWallVis(proj)
 # end
 
 params = []
-params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]    #better than another but not good
+# params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]    #better than another but not good
 # params = [147.55,-20*log10(2.4e9),10.,-0.,-3.,-9.51,-41.14]    #not good
 # params = [147.55,-20*log10(2.4e9),20.,-0.,-3.,-9.51,-41.14]    # badly
 # params =  [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]    # very bad
 # params =  [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]    #bad
-params = [147.55, -187.604, 20.0, -13.0961, -2.0, -2.0, -51.0]
+# params = [147.55, -187.604, 20.0, -13.0961, -2.0, -2.0, -51.0]
 # params =  [147.55,-20*log10(2.4e9),10.,-12.200322140324198,-1.1518270170732752,-13.372525638973702,-12.]    #bad
 # params =  [147.55,-20*log10(2.4e9),10.,-12.200322140324198,-1.1518270170732752,-13.372525638973702,-100.]    #bad
 if params == []
@@ -98,47 +125,138 @@ end
 # Parameter candidate [147.55, -187.604, 10.0, 2.2472, -2.29454, -3.09633, -21.0] with cost 8.572547735642075 for two Ap bad result
 CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
 
-
 ssm = runSearchPath.readSSM(proj)
 ssm2 = JLD.load("$(proj.path_init_data)/ssm_1.jld","ssm")
-K = 50
+K = 20
+error_of_each_path = []
+for i=1:100
+  signals, real_path, ep, err, common_error = JLD.load("$(proj.path_init_data)/clients_jld/client_$(K)_$(i).jld","signalrecords","realpath","estimatedpath","error","commonerror")
+  estim_path = []
+  espa,trellis,steps = LocTrack.estimate_path_viterbi(signals, ssm, proj.plan)
+  common_error = sum(sqrt.(sum(((real_path-espa).^2),2)))/K
+  push!(error_of_each_path, common_error)
+  push!(estim_path, espa)
+  MapVis.plot_paths(ssm2', proj, [real_path], estim_path, true, true, i)
+end
+println("Finish viterbi")
+for i=1:length(error_of_each_path)
+  println(error_of_each_path[i])
+end
+# prob real_path for i p_rssi= -3286.786760150085 and p_transition= -0.591517440922515
+# prob real_path for i cp= -3287.378277591007 and trellis= -0.8539768411132713
+# prob real_path for i  trellis2= -3287.03993765033
+
+ssm = runSearchPath.readSSM(proj)
+espa,trellis,steps = LocTrack.estimate_path_viterbi(signals, ssm, proj.plan)
+coords=[]
+for i=1:length(steps)
+  push!(coords,LocTrack.grid2coord(fold_index(steps[i],plan),plan))
+end
+signals, real_path, ep, err, common_error = JLD.load("$(proj.path_init_data)/clients_jld/client_20_5.jld","signalrecords","realpath","estimatedpath","error","commonerror")
+real_steps=[]
+for i=1:size(real_path,1)
+  push!(real_steps,LocTrack.unfold_index(LocTrack.coord2grid([real_path[i,1],real_path[i,2]],proj.plan),proj.plan))
+end
+
+println("GOOD")
+#   push!(estim_path, ep)
+#   MapVis.plot_paths(ssm2, proj, [real_path], estim_path, true, true, i)
+#   error = sqrt.(sum(((real_path-ep).^2),2))
+#   common_error = sum(sqrt.(sum(((real_path-ep).^2),2)))/10
+#   println("Error of $(i) itteration = $(common_error)")
+# end
+  #
+  #
+#
+#
+# @time path, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, seed ) #proj.APs[length(proj.APs)][1:2,1]
+#
+
+K = 20
+seed = [-18.258438320678234 30.981275475518892]
+ssm = runSearchPath.readSSM(proj)
+ssm2 = JLD.load("$(proj.path_init_data)/ssm_1.jld","ssm")
+error_of_each_path = []
 for i=1:100
   estim_path = []
   real_path = []
-   @time path, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, proj.APs[length(proj.APs)][1:2,1] )
+
+  # seed = [-17.59469408768137 22.592625787210093]
+   path, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, seed ) #proj.APs[length(proj.APs)][1:2,1]
    @time ep,~ = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
    push!(estim_path, ep)
    push!(real_path, path)
    MapVis.plot_paths(ssm2', proj, real_path, estim_path, true, true, i)
    error = sqrt.(sum(((path-ep).^2),2))
-   common_error = sum(sqrt.(sum(((path-ep).^2),2)))/10
-   println("Error of $(i) itteration = $(common_error)")
+   common_error = sum(sqrt.(sum(((path-ep).^2),2)))/K
+   push!(error_of_each_path, common_error)
+   # println("Error of $(i) itteration = $(common_error)")
    save("$(proj.path_init_data)/clients_jld/client_$(K)_$(i).jld", "signalrecords", signal,"realpath",path,"estimatedpath", ep, "error", error, "commonerror", common_error)
    # end
  end
 
+ println("done")
 
+ for i=1:length(error_of_each_path)
+   println(error_of_each_path[i])
+ end
+ # ssm  = []
+ # ssm = runSearchPath.readSSM(proj)
+ # ssm2 = JLD.load("/Volumes/FlashSD/Projects/MasterTheses/Data/indoor_test1/ssm_1.jld","ssm")
+ # push!(ssm,ssm2)
+ # K=10
+ # seed = [-17.59469408768137 22.592625787210093]
+ # @time path_real, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, seed ) #proj.APs[length(proj.APs)][1:2,1]
+
+# for i=1:10
+#   estim_path = []
+#   real_path = []
+#   seed = [-18.258438320678234 30.981275475518892]
+#   push!(estim_path, ep)
+#   push!(real_path, path)
+#   MapVis.plot_paths(ssm2', proj, real_path, estim_path, true, true, i)
+#   # error = sqrt.(sum(((path-ep).^2),2))
+#   # common_error = sum(sqrt.(sum(((path-ep).^2),2)))/10
+#
+# end
+# K = 20
+# signalrecords = []
+# realpath = []
+# estimatedpath = []
+# error = []
+# commonerror = []
+# path = "/Users/NIKMC/Project/MasterThesis/indoor_test2/clients_jld/"
+# for i=1:100
+#   signal, real_path, ep, err, common_error = JLD.load("$(path)client_$(K)_$(i).jld","signalrecords","realpath","estimatedpath","error","commonerror")
+#   push!(signalrecords,signal)
+#   push!(realpath,real_path)
+#   push!(estimatedpath,ep)
+#   push!(error,err)
+#   push!(commonerror,common_error)
+#   println(commonerror[i])
+# end
 
 
 # aps = runSearchPath.readAPs()
 # rssi_records = LocTrack.RssiRecord[]
 # rssi_records.rssi, rssi_records.ap, rssi_records.t = readingClientTracking(aps, "$(proj.path_init_data)/clients","")
-est_path = []
-rssi_rec = []
+# est_path = []
+# rssi_rec = []
+# data_folder = "$(proj.path_init_data)/clients"
+# data_path_folder = "$(proj.path_init_data)/clients_jld"
+# for (fileind,file) in enumerate(readdir(data_path_folder))
+#   rssi, path = JLD.load("$(proj.path_init_data)/clients_jld/client_$(fileind).jld","signalrecords","estimatedpath")
+#   push!(est_path, path)
+#   push!(rssi_rec, rssi)
+# end
+ssm2 = JLD.load("$(proj.path_init_data)/ssm_2.jld","ssm")
 data_folder = "$(proj.path_init_data)/clients"
-data_path_folder = "$(proj.path_init_data)/clients_jld"
-for (fileind,file) in enumerate(readdir(data_path_folder))
-  rssi, path = JLD.load("$(proj.path_init_data)/clients_jld/client_$(fileind).jld","signalrecords","estimatedpath")
-  push!(est_path, path)
-  push!(rssi_rec, rssi)
-end
-
-
+est_path = []
 if length(est_path)==0
   # est_path = runSearchPath.readingClientTracking(aps, data_folder , proj)
   est_path = runSearchPath.readingBasicTracking(data_folder , proj)
 end
-MapVis.plot_paths(proj,est_path)
+MapVis.plot_paths(ssm2',proj,est_path, 2)
 
 
 rssi, path_not = JLD.load("$(proj.path_init_data)/clients_jld/client_1.jld","signalrecords","estimatedpath")

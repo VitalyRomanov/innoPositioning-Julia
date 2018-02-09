@@ -61,7 +61,10 @@ end
 # end
 
 function grid_to_index(grid_coord::Array{Int},index::Pbsm)
+  # println(grid_coord)
+  # println(index)
   ind = (grid_coord)'*[1,index.grid_size[1],index.grid_size[2]*index.grid_size[1]]+1
+  # println(ind)
   return ind[1]
 end
 
@@ -135,6 +138,7 @@ function find_intersected_sectors(object::MBR,index::Pbsm)::Array{Int}
       for z=ind[3,1]:ind[3,2]
         si = grid_to_index([x,y,z],index)
         # println(si)
+        # print(object)
         if overlap(index.sectors[si].mbr,object)
           append!(intersected_sectors,si)
         end

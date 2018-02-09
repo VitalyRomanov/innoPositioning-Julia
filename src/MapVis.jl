@@ -105,8 +105,10 @@ function plot_paths(ssm, project, real_path, est_path, point = false, real = fal
     savefig("$(project.path_init_data)/paths/estimated_path_$(ind).svg")
   end
 
-  function plot_paths(project, est_path)
-    plot_walls!(project)
+  function plot_paths(ssm, project, est_path, ind)
+    ssm_map_path = "$(project.path_init_data)/map_$(ind)"
+
+    plot_map(ssm, project,length(project.APs),ssm_map_path)
     limx = project.plan.limits[1,1]
     limy = project.plan.limits[2,1]
     println("limx = $(limx) , limy = $(limy)")

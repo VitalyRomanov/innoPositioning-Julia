@@ -80,23 +80,6 @@ function read_ap_measur(path, ap_id)
 end
 
 
-# function read_measur(path)
-#   measur_avail = isdir("$(path)/rssi")
-#   measur = Array{Measurement}(0)
-#   if measur_avail
-#     for file in readdir("$(path)/rssi")
-#       if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
-#         loc_id = parse(Int,file[1:end-4])
-#         location = []
-#         rssi = Array(readtable("$(path)/rssi/$(file)",header = false)[:,2])
-#         push!(measur,Measurement(loc_id,location[:],rssi))
-#       end
-#     end
-#   end
-#
-#   return measur_avail,measur
-# end
-
 
 function create_project(init_path,name;secSize = 30.)
   aps = load_aps("$(init_path)/aps.txt")
@@ -437,9 +420,9 @@ function fit_parameters(project;n_rand_inits = 1000)#ap_id
   lim_bounds = [
         -4 -2;
         -30 -5;
-        -100 -15
+        -50 -15
   ]
-  theta = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]
+  theta = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-12.]
   best_cost = 1e10; best_par = []
   for i=1:n_rand_inits
       sample_par = rand(3).*(lim_bounds[:,2]-lim_bounds[:,1]) + lim_bounds[:,1]
@@ -471,13 +454,31 @@ function fmin(theta,X,Y)
 
   const pos = 4
   # theta = [147.55,-20*log10(2.4e9),10.,-0.,-2.5,-12.53,-12.]
-  lower = [1,1,1,-30.,-4.,-20,-100]
-  upper = [1,1,1,30.,-2.,-2,-2]
+  # lower = [1,1,1,-30.,-4.,-20,-100]
+  # upper = [1,1,1,30.,-2.,-2,-2]
   cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2),1:length(X)))
   # cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2)/length(Y[i]),1:length(X)))
-  res = optimize(cost, theta[pos:7], lower[pos:7], upper[pos:7], Fminbox{LBFGS}())
-  # res = optimize(cost,theta[pos:7],LBFGS())
+  # res = optimize(cost, theta[pos:7], lower[pos:7], upper[pos:7], Fminbox{LBFGS}())
+  res = optimize(cost,theta[pos:7],LBFGS())
   return [theta[1:pos-1];Optim.minimizer(res)],Optim.minimum(res)
 
 end
 end
+
+
+# function read_measur(path)
+#   measur_avail = isdir("$(path)/rssi")
+#   measur = Array{Measurement}(0)
+#   if measur_avail
+#     for file in readdir("$(path)/rssi")
+#       if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
+#         loc_id = parse(Int,file[1:end-4])
+#         location = []
+#         rssi = Array(readtable("$(path)/rssi/$(file)",header = false)[:,2])
+#         push!(measur,Measurement(loc_id,location[:],rssi))
+#       end
+#     end
+#   end
+#
+#   return measur_avail,measur
+# end

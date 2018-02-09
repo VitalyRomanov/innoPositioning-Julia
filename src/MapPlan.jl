@@ -10,13 +10,14 @@ module MapPlan
   mutable struct mapPlan
     walls::Array{Wall3D}
     limits::Array{Int}
+    gcell_size::Float64
     sp2d_size::Array{Int}
     index::PBSM.Pbsm
     index2d
     vis_matr::Array{Bool}
   end
 
-  mapPlan(walls,limits,index,index2d,vis_matr) = mapPlan(walls,limits,limits[1:2,2]-limits[1:2,1],index,index2d,vis_matr)
+  mapPlan(walls,limits,index,index2d,vis_matr) = mapPlan(walls,limits,1.,limits[1:2,2]-limits[1:2,1],index,index2d,vis_matr)
 
   function query_walls(path::Line,wall_index)
     return PBSM.probe(wall_index,line2mbr(path))
@@ -366,7 +367,7 @@ module MapPlan
       for wall in filtered_walls
           wi = wall[2]
           wl = Line(wi[:,1],wi[:,2])
-          # println(path2d,wl)
+        #   println(path2d,wl)
           ip,valid = lines_intersection(path2d,wl)
           if valid
               dist = norm(path2d.v1-ip)
