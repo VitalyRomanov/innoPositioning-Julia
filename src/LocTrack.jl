@@ -4,7 +4,9 @@ module LocTrack
   using MapPlan
   using Base.Test
   using Distributions
-  const rssiSigma = 2 # rssi noise stdev
+
+  const rssiSigma = 1 # rssi noise stdev
+  const sqrt_2 = sqrt(2)
 
   export getSpaceInfo,estimate_path_viterbi,RssiRecord,pmodel_space,path_to_rssi,path_generation
 
@@ -12,6 +14,12 @@ module LocTrack
     rssi::Float64
     ap::Int
     t::Float64
+  end
+
+  type scaledPlan
+      limits::Array{Int}
+      gcell_size::Float64
+      sp2d_size::Array{Int}
   end
 
   # type SpaceInfo
@@ -57,7 +65,7 @@ module LocTrack
   # end
 
   # coord2grid takes location on the map and converts it to grid coords
-  coord2grid(coord,plan) = Int.(ceil.(coord-plan.limits[1:2,1]))
+  coord2grid(coord,plan) = Int.(ceil.( (coord-plan.limits[1:2,1]) / plan.gcell_size ))
 
   # function coord2grid(coord::Array{Float64},grid_size::Float64)
   #   # covert coordinates on the map to grid index
@@ -65,7 +73,7 @@ module LocTrack
   # end
 
   # grid2coord takes grid coords and converts it to location on the map
-  grid2coord(grid_loc,plan) = grid_loc+plan.limits[1:2,1]-.5 # .5 is the half of sector size of 1 m2
+  grid2coord(grid_loc,plan) = grid_loc*plan.gcell_size + plan.limits[1:2,1] - plan.gcell_size/2 # .5 is the half of sector size of 1 m2
 
   # function grid2coord(index::Array{Int},grid_size::Float64)
   #   # coordinates on map, based on 2d grid index
@@ -289,28 +297,95 @@ end
   #   return map*boosting_coefficient,[vx[:] vy[:]]
   # end
 
+  function spaceInit(plan)
+      g_size = plan.gcell_size # grid resolution
+      s_size = plan.sp2d_size
+      limits = plan.limits
+      global x_grid = collect( limits[1,1]:g_size:(limits[1,2]-1) ) + g_size/2
+      global y_grid = collect( limits[2,1]:g_size:(limits[2,2]-1) ) + g_size/2
+  end
+
+
+
+  # transProbCoord(x, s, v, t, penalty = 10, acc_var = .33) = begin
+  #
+  #    # Calculate probability distribution of mobility model with velocity penalty
+  #    # x : coordinate
+  #    # v : initial velocity
+  #    # t : time interval
+  #    # penalty : number from 0 to inf, hom much penalty is assigned to the
+  #    #             current value of velocity
+  #    # acc_var : given that the acceleration has normal distribution, specifies
+  #    #             acceleration variance
+  #
+  #    v_abs = abs(v)
+  #    # Parameters are based on the assumption that the pedastrian is most likely to
+  #    # travel with the same speed as before
+  #    mean = s + v * t
+  #    # The value for variance is based on the motion equation
+  #    hig_pen_var = acc_var^2 * t^2 / (1 + (v>0) * v_abs * penalty) / 2
+  #    low_pen_var = acc_var^2 * t^2 / (1 + (v<0) * v_abs * penalty) / 2
+  #
+  #    p_low_lb = mean - 5 * low_pen_var
+  #    p_hig_ub = mean + 5 * hig_pen_var
+  #
+  #    pu = TruncatedNormal(mean, hig_pen_var, mean, p_hig_ub)
+  #    pl = TruncatedNormal(mean, low_pen_var, p_low_lb, mean)
+  #
+  #    p_low = pdf.(pl, x); p_hig = pdf.(pu, x)
+  #   #  println(sum(p_low)," ",sum(p_hig))
+  #
+  #    p_low_sum = sum(p_low)
+  #    p_hig_sum = sum(p_hig)
+  #
+  #    if p_low_sum+p_hig_sum==0.  #x[end] < p_low_lb || x[1] > p_hig_ub
+  #       # if all probabilities are zero
+  #       return p_low
+  #    elseif p_low_sum == 0. && p_hig_sum > 0.
+  #       # mean value is less than provided x
+  #       p_tot = p_hig
+  #    elseif p_hig_sum == 0. && p_low_sum > 0.
+  #       # mean value is greater than provided x
+  #       p_tot = p_low
+  #    else
+  #       nze = find(p_hig)[1] # find first non-zero
+  #       factor = p_low[nze]/p_hig[nze]
+  #       p_low[nze] = 0
+  #       p_hig *= factor
+  #       p_tot = (p_low+p_hig)
+  #    end
+  #    total_factor = 1/sum(p_tot)
+  #    p_tot *= total_factor
+  #    return map(p->if p>0 log10(p) else -200. end, p_tot)
+  # end
+
+
+
   function transLogDist(state::Int, # previous state. defines mean value
                         v::Array{Float64}, # velocity defines mean value
                         plan,
                         dt::Float64)
-    g_size = 1. # only one grid resolution is currently supported
+    g_size = plan.gcell_size # grid resolution
     s_size = plan.sp2d_size
     limits = plan.limits
     # println("fold_index = $(fold_index(state,plan))")
     loc = grid2coord(fold_index(state,plan),plan)
     # create strided distance vector for further calculations
     # create these once outside this function
-    dx = collect( limits[1,1]:g_size:(limits[1,2]-1) )  + g_size/2
-    dy = collect( limits[2,1]:g_size:(limits[2,2]-1) )  + g_size/2
+    dx = x_grid #  * g_size + g_size/2
+    dy = y_grid #  * g_size + g_size/2
     # need support for rectangular space
-    x = lognormpdf(dx,loc[1]+v[1]*dt,dt/1.414213562373095)
-    y = lognormpdf(dy,loc[2]+v[2]*dt,dt/1.414213562373095)
+    # x = lognormpdf(dx,loc[1]+v[1]*dt,dt/sqrt_2)
+    # y = lognormpdf(dy,loc[2]+v[2]*dt,dt/sqrt_2)
+    x = transProbCoord(dx,loc[1],v[1],dt)
+    y = transProbCoord(dy,loc[2],v[2],dt)
 
-    x1 = normalpdf(dx,loc[1]+v[1]*dt,dt/1.414213562373095)
-    y1 = normalpdf(dy,loc[2]+v[2]*dt,dt/1.414213562373095)
-
-    map1 = broadcast(*,x1,y1')
-    log.(map1)
+    # =============Normal PDF ======================================
+    # x1 = normalpdf(dx,loc[1]+v[1]*dt,dt/1.414213562373095)
+    # y1 = normalpdf(dy,loc[2]+v[2]*dt,dt/1.414213562373095)
+    #
+    # map1 = broadcast(*,x1,y1')
+    # log.(map1)
 
 
     # x = transProb(dx, loc[1], v[1], dt)
@@ -326,12 +401,13 @@ end
     vy = ones(Float64,s_size[1])*(v[2]+ay*dt)'
     #---------------------- println("The velocity by x=$(vx) | y=$(vy)")
     # check velocity
-    sum(exp.(map))
+    # sum(exp.(map))
     lpdfmax = maximum(map)            #deleted normolize?
     return map-lpdfmax,[vx[:] vy[:]]
   end
 
-  function transProb(x, s, v, t, penalty = 1, acc_var = .30)
+
+  function transProbCoord(x, s, v, t, penalty = 1, acc_var = .30)
 
        # Calculate probability distribution of mobility model with velocity penalty
        # x : coordinate
@@ -391,7 +467,7 @@ end
   # ==== Needs improvement ====
   function path_to_rssi(path,signal_map,plan, dt = 1.)
     #   this function needs to be adapted for the use with mapPlan
-    g_size = 1.
+    g_size = plan.gcell_size
     signalInfo = Array(RssiRecord,size(path,1))
     rssi = zeros(Float64,size(path,1),1)
     index_path = zeros(Float64,size(path,1),2)
@@ -459,6 +535,41 @@ end
   #   return trellis,velocity,path_back
   # end
 
+
+  function scaleSpace(plan,ssms,factor)
+      newssms = Array{Array{Float64}}(0)
+
+      new_size = Int.(ceil.( (plan.limits[1:2,2]-plan.limits[1:2,1]) / factor))
+      for ssm in ssms
+          newssm = zeros((new_size...))
+          for x=1:size(newssm,1), y=1:size(newssm,2)
+              x_top = min(size(ssm,1),x*factor-1)
+              y_top = min(size(ssm,2),y*factor-1)
+              newssm[x,y] = maximum(ssm[x*factor-factor+1:x_top,y*factor-factor+1:y_top])
+          end
+          push!(newssms,newssm)
+      end
+
+      newplan = scaledPlan(plan.limits,factor,new_size)
+
+      return newplan,newssms
+  end
+
+  # function combine_logtrellis(temp_trellis::Array{Float64},temp_velocity::Array{Float64})
+  #   g_size = size(temp_trellis,1)
+  #   trellis = zeros(Float64,g_size)
+  #   velocity = zeros(Float64,g_size,2)
+  #   path_back = zeros(Int32,g_size)
+  #   (~,maxind) = findmax(temp_trellis,1)
+  #
+  #   trellis = temp_trellis[maxind]
+  #   velocity = temp_velocity[maxind]
+  #   temp = ceil(maind/g_size)
+  #   path_back = maxind - (temp-1)*g_size
+  #
+  #   return trellis,velocity,path_back
+  # end
+
   function beam_search(data, K) # data = trellis[:,1]
     trellis = sort(data, rev=true)
     state = findin(data,trellis[1:K])
@@ -489,9 +600,9 @@ end
 	#  # return [argmax(s) for s in data] #python version
   # end
 
-  function estimate_path_viterbi(signals,#::Array{RssiRecord},
-                                  signal_map,#::Array{Array{Float64}},
-                                  plan;
+  function estimate_path_viterbi(signals::Array{RssiRecord},
+                                  o_signal_map::Array{Array{Float64}},
+                                  o_plan;
                                   seed = [-1. -1.],
                                   testing = false,
                                   ip = [],
@@ -518,10 +629,16 @@ end
     # In order to cope with this problem probability scaling is used
 
 
+    plan,signal_map = scaleSpace(o_plan,o_signal_map,5)
+    spaceInit(plan)
+
+
     g_size = prod(plan.sp2d_size) # total number of cells in the grid
     trellis = zeros(Float64,g_size,2)-1e10 # stores previous and current state probability
     velocity = zeros(Float64,g_size,2,2) # stores previous and current state velocity in xy dimensions
     path_back = zeros(Int32,g_size,length(signals)) # stores feasible paths
+
+
 
 
     # initialize state probabilities based on seed location, or assume
@@ -586,8 +703,10 @@ end
       # println(trellis[:,1])
       # println("before for state in 1:1:g_size")
 
+
       # for state in 1:1:g_size
       for state in beam_search(trellis[:,1],50)
+      # println("before for state in 1:1:g_size")
         # iterate over states in trellis for exhaustive optimum search
         # println("State = $(state)")
         # continue onlu if the log probability of the previous state is
@@ -642,6 +761,8 @@ end
           #   end
           # end
 
+          # println("before combine_trellis")
+
           # slicing creates new arrays -> performance issue
           trellis[:,2],velocity[:,:,2],path_back[:,i+1] = combine_trellis(trellis[:,2],
                                                                           velocity[:,:,2],
@@ -683,6 +804,7 @@ end
 
       # end
       # print("\n")
+    #   print("\n")
       # trellis[:,i+1],velocity[:,:,i+1],path_back[:,i+1] = combine_logtrellis(temp_trellis,temp_velocity)
       # boosting = 1e100
       # boosting_coefficient = boosting/sum(trellis[:,i+1])
@@ -701,13 +823,13 @@ end
       # step for the next iteration
       trellis[:,1] = trellis[:,2]
       velocity[:,:,1] = velocity[:,:,2]
-      trellis[:,2] = zeros(Float64,g_size)-1e10 # creating new array -> performance issues
-      velocity[:,:,2] = zeros(Float64,g_size,2) # creating new array -> performance issues
+      trellis[:,2] = -1e10. #zeros(Float64,g_size)-1e10 # creating new array -> performance issues
+      velocity[:,:,2] = 0. #zeros(Float64,g_size,2) # creating new array -> performance issues
       # toc()
     end
     # println("Allocate memory for estimated path")
     # Allocate memory for estimated path
-    estimated_path = zeros(Float64,length(signals),2)
+    estimated_path = zeros(Float64,length(signals),3)
     # Find most likely path
     step_back = indmax(trellis[:,1])
     # println("step_back= $(step_back)")
@@ -720,18 +842,21 @@ end
     steps = []
     # Propagate back to find the most likely path
     for step_ind in length(signals):-1:1
+
       # println("path-back= $(path_back) |step_ind= $(step_ind)")
       # println("step_back= $(step_back) |step_ind= $(step_ind)")
       push!(steps,step_back)
-      estimated_path[step_ind,:] = grid2coord(
+      estimated_path[step_ind,1:2] = grid2coord(
                                       fold_index(step_back,plan),
                                                   plan)
+      estimated_path[step_ind,3] = signals[step_ind].t
       step_back = path_back[step_back,step_ind]
 
     end
 
 
     # return trellis,velocity
-    return estimated_path,trellis,steps
+
+    return estimated_path, steps
   end
 end

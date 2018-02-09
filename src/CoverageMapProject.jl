@@ -9,6 +9,7 @@ using HDF5, JLD
 using DataFrames
 using Optim
 using MapVis
+using LocTrack
 
 
 type Measurement
@@ -33,6 +34,16 @@ type CMProject
 
 end
 
+function read_measurements(project)
+    measurs = Dict()
+    measur_path = "$(project.path_init_data)/loc/"
+    for ap_id = 1:length(project.APs)
+        if isdir("$(measur_path)/$(ap_id)")
+            measurs[ap_id] = read_ap_measur(project.path_init_data,ap_id)
+        end
+    end
+    return measurs
+end
 
 # function read_measurements(path, ap_id)
 #   # import empirical RSSI measurements from disk
@@ -52,17 +63,6 @@ end
 #   return measur_avail,measur
 # end
 
-function read_measurements(project)
-    measurs = Dict()
-    measur_path = "$(project.path_init_data)/loc/"
-
-    for ap_id = 1:length(project.APs)
-        if isdir("$(measur_path)/$(ap_id)")
-            measurs[ap_id] = read_ap_measur(project.path_init_data,ap_id)
-        end
-    end
-    return measurs
-end
 
 function read_ap_measur(path, ap_id)
   # import empirical RSSI measurements from disk
@@ -84,10 +84,6 @@ end
 function create_project(init_path,name;secSize = 30.)
   aps = load_aps("$(init_path)/aps.txt")
   map_plan = create_map_plan(init_path,secSize = secSize)
-
-
-
-
   project = CMProject(init_path,
                       name,
                       aps,
@@ -310,6 +306,7 @@ end
 #   save_proj(project)
 # end
 
+# ============ Functions for fitting parameters ==================
 
 
 # function fit_parameters(project,ap_id)
@@ -423,6 +420,7 @@ function fit_parameters(project;n_rand_inits = 1000)#ap_id
         -50 -15
   ]
   theta = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-12.]
+  # theta = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]
   best_cost = 1e10; best_par = []
   for i=1:n_rand_inits
       sample_par = rand(3).*(lim_bounds[:,2]-lim_bounds[:,1]) + lim_bounds[:,1]
@@ -439,7 +437,7 @@ function fit_parameters(project;n_rand_inits = 1000)#ap_id
   min_val = best_cost
   # divide cost function by the number of observations
   rms_error = sqrt(min_val/n_obs)
-  println("\nRMS $(rms_error); Optimal Parameters:\nGain: $(theta[4])\nAttenuation exponent: $(-theta[5])\nReflection coefficient: $(theta[6])\nTransmission coefficient: $(theta[7])\n")
+  println("\nRMS $(rms_error); Optimal Parameters:\nGain: $(theta[4])\nAttenuation exponent: $(theta[5])\nReflection coefficient: $(theta[6])\nTransmission coefficient: $(theta[7])\n")
   #calculate estimated signal strength using fit parameters
   mean_rssi = map(i->10*log10(sum(10.^(X[i]*theta/10))),1:length(X))
 
@@ -482,3 +480,69 @@ end
 #
 #   return measur_avail,measur
 # end
+
+function load_ssms(project)
+    ssms = Array{Array{Float64}}(0)
+    for ap_ind = 1:length(project.APs)
+        push!(ssms,JLD.load("$(project.path_init_data)/ssm_$(ap_ind).jld","ssm"))
+    end
+    return ssms
+end
+
+function load_clients(project)
+    records = []
+    for file in readdir("$(project.path_init_data)/clients")
+        if file[end-2:end] != "csv" continue end
+        client_path = "$(project.path_init_data)/clients/$(file)"
+        push!(records,(file[1:end-4],load_client(client_path)))
+    end
+    return records
+end
+
+function load_client(path)
+    Record = LocTrack.RssiRecord
+    rssi = :rssilog_rssi
+    ap_id = :rssilog_antenna
+    time = :rssilog_timestamp
+    readings = Array{Record}(0)
+
+    client = readtable(path)
+    n_rec = size(client,1)
+    if n_rec>0
+        push!(readings,Record(client[1,rssi],client[1,ap_id],client[1,time]))
+    end
+    last_t = client[1,time]
+    if n_rec>1
+        for i=2:n_rec
+            if client[i,time]-last_t > 0 && client[i,rssi] < -10
+                push!(readings,
+                    Record(client[i,rssi],client[i,ap_id],client[i,time]))
+                last_t = client[i,time]
+            end
+        end
+    end
+    return readings
+end
+
+
+function restore_paths(clients,ssms,project)
+    paths_path = "$(project.path_init_data)/paths"
+    mkpath(paths_path)
+    # clients = clientz[7:8]
+    for (client_fn,records) in clients
+        print("\rProcessign $(client_fn)")
+        path = LocTrack.estimate_path_viterbi(
+                    records,
+                    ssms,
+                    project.plan
+        )
+        writetable("$(paths_path)/$(client_fn).csv",
+                    convert(DataFrame,path),
+                    header=false)
+        MapVis.plot_paths(project,[path[:,1:2]],client_fn)
+    end
+    println("")
+
+end
+
+end

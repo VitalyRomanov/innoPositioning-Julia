@@ -65,7 +65,7 @@ end
 
 if resp==1
   print("Enter new project name: ")
-  name = readline()[1:end]
+  name = readline()
   print("Enter path for the project: ")
   load_path = strip(readline())
   # name = "test8"
@@ -116,6 +116,9 @@ params = []
 # params = [147.55, -187.604, 20.0, -13.0961, -2.0, -2.0, -51.0]
 # params =  [147.55,-20*log10(2.4e9),10.,-12.200322140324198,-1.1518270170732752,-13.372525638973702,-12.]    #bad
 # params =  [147.55,-20*log10(2.4e9),10.,-12.200322140324198,-1.1518270170732752,-13.372525638973702,-100.]    #bad
+
+# params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
+
 if params == []
     params = CoverageMapProject.fit_parameters(proj)
 end
@@ -132,7 +135,7 @@ error_of_each_path = []
 for i=1:100
   signals, real_path, ep, err, common_error = JLD.load("$(proj.path_init_data)/clients_jld/client_$(K)_$(i).jld","signalrecords","realpath","estimatedpath","error","commonerror")
   estim_path = []
-  espa,trellis,steps = LocTrack.estimate_path_viterbi(signals, ssm, proj.plan)
+  espa,steps = LocTrack.estimate_path_viterbi(signals, ssm, proj.plan)
   common_error = sum(sqrt.(sum(((real_path-espa).^2),2)))/K
   push!(error_of_each_path, common_error)
   push!(estim_path, espa)
@@ -147,7 +150,7 @@ end
 # prob real_path for i  trellis2= -3287.03993765033
 
 ssm = runSearchPath.readSSM(proj)
-espa,trellis,steps = LocTrack.estimate_path_viterbi(signals, ssm, proj.plan)
+espa,steps = LocTrack.estimate_path_viterbi(signals, ssm, proj.plan)
 coords=[]
 for i=1:length(steps)
   push!(coords,LocTrack.grid2coord(fold_index(steps[i],plan),plan))
@@ -183,7 +186,7 @@ for i=1:100
 
   # seed = [-17.59469408768137 22.592625787210093]
    path, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, seed ) #proj.APs[length(proj.APs)][1:2,1]
-   @time ep,~ = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
+   @time ep,steps = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
    push!(estim_path, ep)
    push!(real_path, path)
    MapVis.plot_paths(ssm2', proj, real_path, estim_path, true, true, i)
@@ -196,6 +199,13 @@ for i=1:100
  end
 
  println("done")
+
+ # ssms = CoverageMapProject.load_ssms(proj)
+ #
+ # clients = CoverageMapProject.load_clients(proj)
+ #
+ # CoverageMapProject.restore_paths(clients,ssms,proj)
+
 
  for i=1:length(error_of_each_path)
    println(error_of_each_path[i])
@@ -323,14 +333,14 @@ println("Good")
 #
 #
 # traj = []
-# traj,~ = LocTrack.estimate_path_viterbi(signalsOfRSSI, [ssm], spaceInfo)
+# traj = LocTrack.estimate_path_viterbi(signalsOfRSSI, [ssm], spaceInfo)
 # pths = [ [ traj[i,1],traj[i,2] ] for i=1:size(traj,1) ]
  function synthetic_test()
 
 for i in 10
    ssm = runSearchPath.readSSM(proj)
    path, signal = LocTrack.path_generation(LocTrack.acelerationDist, 10, ssm, proj.plan, proj.APs[length(proj.APs)][1:2,1] )
-   est_path = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
+   est_path,step = LocTrack.estimate_path_viterbi(signal, ssm, proj.plan)
    MapVis.plot_paths(proj, path, est_path, true, real = true, i)
  end
  end
