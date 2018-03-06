@@ -78,7 +78,7 @@ end
       push!(signalsOfRSSI, LocTrack.RssiRecord(value,ap_id,convert(Float64, t[1])))
     end
     traj = []
-    traj,~ = LocTrack.estimate_path_viterbi(signalsOfRSSI, ssm_path, project.plan )
+    traj = estimate_path_viterbi(signalsOfRSSI, ssm_path, project.plan )
     return pths = [ [ traj[i,1],traj[i,2] ] for i=1:size(traj,1) ]
   end
 
@@ -120,10 +120,11 @@ end
     return measur_avail,measur
   end
 
-  function readAPs()
+  function readAPs(path_file_ap)
     aps = Dict()
     i=1
-    for l in "/Users/NIKMC/Project/MasterThesis/ap_i.txt"|>eachline
+    # for l in "/Users/NIKMC/Project/MasterThesis/ap_i.txt"|>eachline
+    for l in path_file_ap|>eachline
       fields = split(l, ',')
       for ii=1:length(fields)
         aps[fields[ii]] = i
@@ -144,8 +145,8 @@ end
   end
 
 
-  function readingClientTracking(data_folder,project)
-    aps = readAPs()
+  function readingClientTracking(data_folder,project,path_file_ap)
+    aps = readAPs(path_file_ap)
     ssm = readSSM(project)
     estim_path = []
     for (fileind,file) in enumerate(readdir(data_folder))
@@ -170,25 +171,73 @@ end
           # rssi_records
     println("rssi_records = ", rssi_records)
     println("start estimate path with viterbi")
-    @time ep,~ = estimate_path_viterbi(rssi_records, ssm, project.plan )
+    @time ep = estimate_path_viterbi(rssi_records, ssm, project.plan )
     # println("end estimate path with viterbi")
     # println("path = ", ep)
     push!(estim_path, ep)
 
     println("Saving for client $(file)")
-    save("$(project.path_init_data)/clients_jld/client_$(fileind).jld", "signalrecords", rssi_records,"estimatedpath",ep)
+    save("$(project.path_init_data)/clients_jld/client_$(file).jld", "signalrecords", rssi_records,"estimatedpath",ep)
     # save("$(current_path)/res/paths/client_$(fileind).jld", "signalrecords", signal_records,"estimatedpath",ep,"timestamps", time)
   end
-# Array(readtable("$(path)/rssi_path/$(ap_id)/$(file)",header = false)[:,2])
+  # Array(readtable("$(path)/rssi_path/$(ap_id)/$(file)",header = false)[:,2])
   # timestamps = Array(client[:,5])
   # timestamps = timestamps[1:11922]
   # save("$(current_path)/res/paths/client_1.jld", "signalrecords", signal_records,"estimatedpath",ep,"timestamps", timestamps)
 
 
-# time(Libc.strptime("%Y-%m-%d %T","2015-09-18 01:01:23.24963"))
-return estim_path
+  # time(Libc.strptime("%Y-%m-%d %T","2015-09-18 01:01:23.24963"))
+return estim_path, ssm
 end
 
+function loadingSyntheticTestPathFor1AP(proj,K)
+  ssm = readSSM(proj)
+  ssm2 = JLD.load("$(proj.path_init_data)/ssm_1.jld","ssm")
+  error_of_each_path = []
+  for i=1:100
+    signals, real_path, ep, err, common_error = JLD.load("$(proj.path_init_data)/clients_jld/client_$(K)_$(i).jld","signalrecords","realpath","estimatedpath","error","commonerror")
+    estim_path = []
+    println("start viterbi $(i)")
+    @time espa = estimate_path_viterbi(signals, ssm, proj.plan)#, seed = real_path[1,:])
+    # for j=1:K
+    #   println("signals in real path = $(signals[j].rssi)")
+    #   println("signals in estimated path = $(ssm[1][LocTrack.coord2grid(espa[j,1:2],proj.plan)[1],LocTrack.coord2grid(espa[j,1:2],proj.plan)[2]])")
+    # end
+    common_error = sum(sqrt.(sum(((real_path-espa[:,1:2]).^2),2)))/K
+    push!(error_of_each_path, common_error)
+    push!(estim_path, espa)
+    MapVis.plot_paths(ssm2', proj, [real_path], estim_path, true, true, i)
+  end
+  for i=1:length(error_of_each_path)
+    println(error_of_each_path[i])
+  end
+  println("Finish viterbi")
+end
+
+function creatingSyntheticTestPathFor1AP(proj,K; seed = [-18.258438320678234 30.981275475518892])
+  ssm = runSearchPath.readSSM(proj)
+  ssm2 = JLD.load("$(proj.path_init_data)/ssm_1.jld","ssm")
+  error_of_each_path = []
+  for i=1:100
+    estim_path = []
+    real_path = []
+    # seed = [-17.59469408768137 22.592625787210093]
+     path, signal = LocTrack.path_generation(LocTrack.acelerationDist, K, ssm, proj.plan, seed ) #proj.APs[length(proj.APs)][1:2,1]
+     println("start viterbi $(i)")
+     @time ep = estimate_path_viterbi(signal, ssm, proj.plan)
+     println("Finish viterbi")
+     push!(estim_path, ep)
+     push!(real_path, path)
+     MapVis.plot_paths(ssm2', proj, real_path, estim_path, true, true, i)
+     # error = sqrt.(sum(((path-ep[:,1:2]).^2),2))
+     common_error = sum(sqrt.(sum(((path-ep[:,1:2]).^2),2)))/K
+     push!(error_of_each_path, common_error)
+     println("Error of $(i) itteration = $(common_error)")
+     println("SavingData in clients_jld/client_$(K)_$(i).jld")
+     save("$(proj.path_init_data)/clients_jld/client_$(K)_$(i).jld", "signalrecords", signal,"realpath",path,"estimatedpath", ep, "error", error, "commonerror", common_error)
+     # end
+  end
+end
 
 function readingBasicTracking(data_folder,project)
   ssm = readSSM(project)
@@ -203,7 +252,7 @@ function readingBasicTracking(data_folder,project)
     # t = convertTimeStamp(timestamps)
     println("Checking data...")
 
-    if(length(rssi)==length(t) && length(rssi)==length(ap) && length(t)==length(ap))
+    if (length(rssi)==length(t) && length(rssi)==length(ap) && length(t)==length(ap))
       println("it's ok...")
       for i=1:length(rssi)
         push!(rssi_records, LocTrack.RssiRecord(rssi[i],ap[i],t[i]))
@@ -213,10 +262,11 @@ function readingBasicTracking(data_folder,project)
     # return rssi_records, time, ap
         # rssi_records
   println("rssi_records = ", rssi_records)
+  # println("ssm = $(ssm)")
   println("start estimate path with viterbi")
-  @time ep,~ = estimate_path_viterbi(rssi_records, ssm, project.plan )
+  @time ep = estimate_path_viterbi(rssi_records, ssm, project.plan )
   # println("end estimate path with viterbi")
-  # println("path = ", ep)
+  println("path = ", ep)
   push!(estim_path, ep)
 
   println("Saving for client $(file)")
@@ -228,19 +278,19 @@ end
 
 
 function predprocessing(rssi_p,ap_p,t_p)
-rssi = []
-ap = []
-t = []
-loc_rssi = []
-loc_ap = []
-loc_t = []
-  for i=1:length(rssi_p)
-    if rssi_p[i]!=0
-      push!(rssi,rssi_p[i])
-      push!(ap,ap_p[i])
-      push!(t,t_p[i])
+  rssi = []
+  ap = []
+  t = []
+  loc_rssi = []
+  loc_ap = []
+  loc_t = []
+    for i=1:length(rssi_p)
+      if rssi_p[i]!=0
+        push!(rssi,rssi_p[i])
+        push!(ap,ap_p[i])
+        push!(t,t_p[i])
+      end
     end
-  end
   # for i=1:length(rssi)
     # println("RSSI = $(rssi[i]) \t ap = $(ap[i]) \t time = $(t[i])")
   # end
@@ -269,7 +319,7 @@ end
 
 function getBasicRecords(client)
   rssi = Array(client[:,2])
-  timestamps = Array(client[:,3])
+  timestamps = Array{Int64}(client[:,3])
   ap = Array(client[:,1])
   return rssi,ap,timestamps
 end

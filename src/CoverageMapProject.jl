@@ -544,5 +544,3 @@ function restore_paths(clients,ssms,project)
     println("")
 
 end
-
-end

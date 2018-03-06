@@ -123,10 +123,10 @@ function plot_paths(ssm, project, real_path, est_path, point = false, real = fal
           annotate!((path[i,1]-limx),(path[i,2]-limy)+2*7/10,text("$i",7),subplot = 1)
         end
       end
-    for map_ind=1:length(project.APs)
-        plot!([project.APs[map_ind][1]-limx], [project.APs[map_ind][2]-limy], markershape=:diamond, markercolor=:pink)
-        annotate!((project.APs[map_ind][1]-limx),(project.APs[map_ind][2]-limy)+2*7/10,text("$(map_ind)",7),subplot = 1)
-    end
+      for map_ind=1:length(project.APs)
+          plot!([project.APs[map_ind][1]-limx], [project.APs[map_ind][2]-limy], markershape=:diamond, markercolor=:pink)
+          annotate!((project.APs[map_ind][1]-limx),(project.APs[map_ind][2]-limy)+2*7/10,text("$(map_ind)",7),subplot = 1)
+      end
       if !isdir("$(project.path_init_data)/paths")
         mkdir("$(project.path_init_data)/paths")
       end
@@ -157,7 +157,58 @@ function plot_paths(project,paths,mp_ind)
   savefig("$(project.path_init_data)/paths/$(mp_ind).svg")
 end
 
+function plot_pathsInno(project, est_path)
+plot_walls!(project)
+limx = project.plan.limits[1,1]
+limy = project.plan.limits[2,1]
+println("limx = $(limx) , limy = $(limy)")
+for path in est_path
+  for i=1:size(path,1)-1
+    plot!([path[i,1],path[i+1,1]]-limx,[path[i,2],path[i+1,2]]-limy,linecolor=:red, subplot = 1)
+  end
+end
+  for path in est_path
+    for i=1:size(path,1)
+      plot!([path[i,1]-limx],[path[i,2]-limy],markershape=:diamond,markercolor=:red,subplot = 1)
+      annotate!((path[i,1]-limx),(path[i,2]-limy)+2*7/10,text("$i",7),subplot = 1)
+    end
+  end
+for map_ind=1:length(project.APs)
+    plot!([project.APs[map_ind][1]-limx], [project.APs[map_ind][2]-limy], markershape=:diamond, markercolor=:pink)
+    annotate!((project.APs[map_ind][1]-limx),(project.APs[map_ind][2]-limy)+2*7/10,text("$(map_ind)",7),subplot = 1)
+end
+ if !isdir("$(project.path_init_data)/paths")
+   mkdir("$(project.path_init_data)/paths")
+ end
+ savefig("$(project.path_init_data)/paths/estimated_path.svg")
+end
 
+
+function plot_pathsItaly(project, est_path)
+   plot_walls!(project)
+   limx = project.plan.limits[1,1]
+   limy = project.plan.limits[2,1]
+   println("limx = $(limx) , limy = $(limy)")
+   for path in est_path
+     for i=1:length(path)-1
+       plot!([path[i][1],path[i+1][1]]-limx,[path[i][2],path[i+1][2]]-limy,linecolor=:red, subplot = 1)
+     end
+   end
+     for path in est_path
+       for i=1:length(path)-1
+         plot!([path[i][1]-limx],[path[i][2]-limy],markershape=:diamond,markercolor=:red,subplot = 1)
+         annotate!((path[i][1]-limx),(path[i][2]-limy)+2*7/10,text("$i",7),subplot = 1)
+       end
+     end
+   for map_ind=1:length(project.APs)
+       plot!([project.APs[map_ind][1]-limx], [project.APs[map_ind][2]-limy], markershape=:diamond, markercolor=:pink)
+       annotate!((project.APs[map_ind][1]-limx),(project.APs[map_ind][2]-limy)+2*7/10,text("$(map_ind)",7),subplot = 1)
+   end
+    if !isdir("$(project.path_init_data)/paths")
+      mkdir("$(project.path_init_data)/paths")
+    end
+    savefig("$(project.path_init_data)/paths/estimated_path.svg")
+   end
 
 function visualizeWallVis(project, range = [])
     # function serves only debugging purposes

@@ -7,9 +7,6 @@ module LocTrack
 
   const rssiSigma = 1 # rssi noise stdev
   const sqrt_2 = sqrt(2)
-  const sqrt_2pi = sqrt(2*pi)
-  const eps_log = 1.e-200
-  const log_eps_log = log(eps_log) # const
 
   export getSpaceInfo,estimate_path_viterbi,RssiRecord,pmodel_space,path_to_rssi,path_generation
 
@@ -39,33 +36,28 @@ module LocTrack
 
   struct TestPlan
       limits
-      gcell_size
       sp2d_size
+
   end
 
   ##### Auxiliary functions
 
-
   # log of Normal PDF
-  lognormpdf(x,m,s) = -((x.-m)./s).^2/2-log(sqrt_2pi.*s)
+  # lognormpdf(x,m,s)  = @. -((x-m)/s)^2/2-log(2.5066282746310002*s)
+  lognormpdf(x,m,s)  = -((x.-m)./s).^2/2-log(2.5066282746310002.*s)
+  # lognormpdf(x,m,s)  = @. -((x-m)/s)^2/2-log(2.5066282746310002*s)
 
-  # truncate(log_x) = begin
-  #     (log_x < log_eps_log) ? log_eps_log : log_x
-  # end
-  #
-  # truncated_log(x) = begin
-  #     (x < eps_log) ? log_eps_log : log(x)
-  # end
 
+  normalpdf(x,m,s) = (1/(sqrt(2*pi).*s))*e.^-(((x.-m)./s).^2/2)
   # function getSpaceInfo(space,grid_size=1.)
   #   grid = Int.(floor.(space/grid_size))
   #   return SpaceInfo(space,grid,grid_size)
   # end
 
-  # function pmodel_space(ap_loc,spaceInfo::SpaceInfo,pmodel::PModelParam)
+  # function pmodel_space(ap_loc,plan)
   #   # creates coverage map
-  #   x = ones(Float64,spaceInfo.grid[1],1) * collect(0:1:(spaceInfo.grid[2]-1))' * spaceInfo.grid_size
-  #   y = (ones(Float64,spaceInfo.grid[2],1) * collect(0:1:(spaceInfo.grid[1]-1))')' * spaceInfo.grid_size
+  #   x = ones(Float64,plan.grid[1],1) * collect(0:1:(plan.grid[2]-1))' * plan.gcell_size
+  #   y = (ones(Float64,plan.grid[2],1) * collect(0:1:(plan.grid[1]-1))')' * plan.gcell_size
   #   d = sqrt((x-ap_loc[1]).^2+(y-ap_loc[2]).^2)
   #   d[1,1] = .1
   #   value = pmodel.p_d0 - 10 * pmodel.alpha * log10(d/pmodel.d0)
@@ -110,16 +102,14 @@ module LocTrack
   #   return ii
   # end
 
-  function seed_location(seed,plan)             # +1 sec in running time viterbi
+  seed_location(seed,plan) = begin
     # creates distrubution over space with all probability mass in the position
     # specified by seed
       index = coord2grid(seed,plan)
-      seeded_location = zeros(Float64,tuple(plan.sp2d_size...))+eps_log
+      seeded_location = zeros(Float64,tuple(plan.sp2d_size...))
       seeded_location[index[1],index[2]] = 1.
-      seeded_location .=log.(seeded_location)
-      return seeded_location
+      seeded_location
   end
-
 
   # function seed_location(seed,spaceInfo)
   #   index = coord2grid(seed,spaceInfo.grid_size)
@@ -141,7 +131,8 @@ module LocTrack
   # end
 
   function run_tests()
-      plan = TestPlan([-5 5;-5 5;-5 5],[10, 10])
+      # plan = TestPlan([-5 5;-5 5;-5 5],[5, 5],1.)
+      plan = TestPlan([-1 4;0 5;-5 5],[5, 5],1.)
 
       @test coord2grid([4.9,4.9],plan) == [10,10]
       @test grid2coord([1,1],plan) == [-4.5,-4.5]
@@ -152,9 +143,91 @@ module LocTrack
   end
 
 
-  ####### Project functions
 
-  # function path_generation(seed,path_lenght,signal_map,spaceInfo, dt = 1.)
+  ####### Project functions
+  # type SpaceInfo
+  #  -    space::Array{Int}
+  #  -    grid::Array{Int}
+  #  -    grid_size::Float64
+  #  -  end
+ #  function getSpaceInfo(space,grid_size=1.)
+ # +  #   grid = Int.(floor.(space/grid_size))
+ # +  #   return SpaceInfo(space,grid,grid_size)
+ #    # end
+ # signal_map::Array{Array{Float64}},
+ # plan;
+ # seed = [-1. -1.],
+ # grid_space_size = spaceInfo.grid[1]*spaceInfo.grid[2] # total number of cells in the grid
+ # +    g_size = prod(plan.sp2d_size) # total number of cells in the grid
+# grid_size=1.
+ function path_generation(distribution, path_lenght,
+                          signal_map,
+                          plan,
+                          seed = [-1. -1.])
+  # println("Start path generation")
+  path, signals = distribution(path_lenght, signal_map, plan, seed)
+  # println("Finish path generation")
+
+  return path,signals
+end
+
+function acelerationDist(path_lenght,
+                         signal_map,
+                         plan,
+                         seed,
+                         dt = 1.)
+  # plan = TestPlan([-1 5;-2 3;0 5],[5, 5])
+
+  r_sigma = 1 #instead 0.1
+  # seed : initial location
+  # path_lenght : --||--
+  # signal_map : signal strength matrix
+  # dt :
+  # println("Start acelerationDist")
+  t = dt
+  path = zeros(Float64,path_lenght,2) # stores generated path here
+  rssi = zeros(Float64,path_lenght,1)
+  signals  = Array(RssiRecord,path_lenght)
+  v = zeros(Float64,2,1)
+  path[1,:] = seed
+
+  index = coord2grid(path[1,:],plan)
+  # print(index)
+  # rssi[1] = randn()+signal_map[index[1],index[2]]
+  rssi = randn()+signal_map[1][index[1],index[2]]
+  signals[1] = RssiRecord(rssi,1,1.)
+  # println("Start loop to path_lenght")
+  for i in 2:1:path_lenght
+    valid_sample = false
+    s = seed
+    a = seed
+    t+=1
+    # println("Start loop !valid_sample")
+    a_stdev = 0.5487618458
+    while !valid_sample
+      a = randn(2,1) * a_stdev
+      s = path[i-1,:] + v*dt + a*dt^2/2
+      # println("a =$(a) & v=$(v) & s = $(s)")
+      # if (s[1]>0) && (s[2]>0) && (s[1]<spaceInfo.space[1,1]) && (s[2]<spaceInfo.space[2,1])
+      # if prod(s.>0) && prod(s.>plan.limits[1:2,1]) && prod(s.<plan.limits[1:2,2])
+      if prod(s.>plan.limits[1:2,1]) && prod(s.<plan.limits[1:2,2])
+        valid_sample = true
+      else
+        # println(v, s)
+        a_stdev += .05
+      end
+    end
+    # print("Finish loop valid simple")
+    path[i,:] = s
+    v += a*dt
+    index = coord2grid(path[i,:],plan)
+    rssi = r_sigma*randn()+signal_map[1][index[1],index[2]]
+    signals[i] = RssiRecord(rssi,1,t)
+  end
+  return path,signals
+end
+
+  #  function path_generation(seed,path_lenght,signal_map,spaceInfo, dt = 1.)
   #   # seed : initial location
   #   # path_lenght : --||--
   #   # signal_map : signal strength matrix
@@ -165,6 +238,7 @@ module LocTrack
   #   signals  = Array(RssiRecord,path_lenght)
   #   v = zeros(Float64,2,1)
   #   path[1,:] = seed
+  #
   #   index = coord2grid(seed,spaceInfo.grid_size)
   #   # print(index)
   #   # rssi[1] = randn()+signal_map[index[1],index[2]]
@@ -197,76 +271,25 @@ module LocTrack
   #   return dist#/sum(dist)
   # end
 
-  function path_generation(distribution,
-                            path_lenght,
-                           signal_map,
-                           plan,
-                           seed = [-1. -1.])
-   # println("Start path generation")
-   path, signals = distribution(path_lenght, signal_map, plan, seed)
-   # println("Finish path generation")
-
-   return path,signals
-  end
-
-  function acelerationDist(path_lenght,
-                          signal_map,
-                          plan,
-                          seed,
-                          dt = 1.)
-   r_sigma = 1 #instead 0.1
-   t = dt
-   path = zeros(Float64,path_lenght,2) # stores generated path here
-   rssi = zeros(Float64,path_lenght,1)
-   signals  = Array(RssiRecord,path_lenght)
-   v = zeros(Float64,2,1)
-   path[1,:] = seed
-
-   index = coord2grid(path[1,:],plan)
-   # print(index)
-   # rssi[1] = randn()+signal_map[index[1],index[2]]
-   rssi = signal_map[1][index[1],index[2]]
-   signals[1] = RssiRecord(rssi,1,1.)
-   # println("Start loop to path_lenght")
-   for i in 2:1:path_lenght
-     valid_sample = false
-     s = seed
-     a = seed
-     t+=1
-     # println("Start loop !valid_sample")
-     a_stdev = 0.5487618458
-     while !valid_sample
-       a = randn(2,1) * a_stdev
-       s = path[i-1,:] + v*dt + a*dt^2/2
-       # println("a =$(a) & v=$(v) & s = $(s)")
-       # if (s[1]>0) && (s[2]>0) && (s[1]<spaceInfo.space[1,1]) && (s[2]<spaceInfo.space[2,1])
-       # if prod(s.>0) && prod(s.>plan.limits[1:2,1]) && prod(s.<plan.limits[1:2,2])
-       if prod(s.>plan.limits[1:2,1]) && prod(s.<plan.limits[1:2,2])
-         valid_sample = true
-       else
-         # println(v, s)
-         a_stdev += .05
-       end
-     end
-     # print("Finish loop valid simple")
-     path[i,:] = s
-     v += a*dt
-     index = coord2grid(path[i,:],plan)
-     rssi = signal_map[1][index[1],index[2]]
-     signals[i] = RssiRecord(rssi,1,t)
-   end
-   return path,signals
-  end
 
 
 
   function rssiLogDist(rssi::Float64, # current rssi value
-                      signalMap::Array{Float64}, # unrolled coverage map
-                      sigma = 1.)
-    # use coverage map values as mean, rssi as value and rssiSigma as stdev for gaussian distribution
-    return lognormpdf(rssi,signalMap,sigma)
-    # dist = lognormpdf(rssi,signalMap,sigma)
-    # return dist
+                      signalMap::Array{Float64} # unrolled coverage map
+                      )
+    # use coverage map values as mean, rssi as value and
+    # rssiSigma as stdev for gaussian distribution
+    # dist = lognormpdf(rssi,signalMap,rssiSigma)
+    dist = log.(pdf.(Normal.(signalMap,rssiSigma),rssi))
+
+    # log probabilities are normalized
+    # println(dist)
+    # maximum = log(sum(exp.(dist)))
+    # dist./=sum(dist)
+    # dist .= log.(dist)
+    # val = exp.(dist)
+    return dist
+    # return dist-maximum
   end
 
   # function transition_distribution(state,v,spaceInfo,dt = 1.,boosting = 1e100)
@@ -285,16 +308,17 @@ module LocTrack
   #   return map*boosting_coefficient,[vx[:] vy[:]]
   # end
 
-  # function spaceInit(plan)
-  #     g_size = plan.gcell_size # grid resolution
-  #     s_size = plan.sp2d_size
-  #     limits = plan.limits
-  #     global const x_grid = collect( limits[1,1]:g_size:(limits[1,2]-1) ) + g_size/2
-  #     global const y_grid = collect( limits[2,1]:g_size:(limits[2,2]-1) ) + g_size/2
-  # end
+  function spaceInit(plan)
+      g_size = plan.gcell_size # grid resolution
+      s_size = plan.sp2d_size
+      limits = plan.limits
+      global x_grid = collect( limits[1,1]:g_size:(limits[1,2]-1) ) + g_size/2
+      global y_grid = collect( limits[2,1]:g_size:(limits[2,2]-1) ) + g_size/2
+  end
 
 
-  # transProbCoord(x, s, v, t, penalty = 2, acc_var = 0.5487618458) = begin
+
+  # transProbCoord(x, s, v, t, penalty = 10, acc_var = .33) = begin
   #
   #    # Calculate probability distribution of mobility model with velocity penalty
   #    # x : coordinate
@@ -342,143 +366,191 @@ module LocTrack
   #       p_tot = (p_low+p_hig)
   #    end
   #    total_factor = 1/sum(p_tot)
-  #
   #    p_tot *= total_factor
-  #
-  #    # println("v = $(v)") # для каждой скорости смотрим вероятность
-  #
-  #    # velocity = v + 2*(x-s-v*t)/t
-  #    # println("velocity = $(velocity)")
-  #    # p_v = lognormpdf(v,0,10)  #????? нужно нормализовать так как значения от -3 до - 1000 и т.д.
-  #    # println("p_v = $(p_v)")
-  #    # p_v=exp(p_v)
-  #    # p_v ./= sum(p_v)
-  #    # p_v .= log.(p_v)
-  #    # p_tot*=p_v
-  #    return map(p->if p>0 log(p) else -200. end, p_tot) # is it need
+  #    return map(p->if p>0 log10(p) else -200. end, p_tot)
   # end
-  function transProbCoord(x, s, v, t, penalty = 10, acc_var =1)# 0.5487618458)
-         v_abs = abs(v)
-         mean = s + v * t
-         hig_pen_var = acc_var * t^2 / (1 + (v>0) * v_abs * penalty) / 2
-         low_pen_var = acc_var * t^2 / (1 + (v<0) * v_abs * penalty) / 2
-         p_low_lb = mean - 5 * low_pen_var              #жестко ограничен никуда не двигается на рабочих данных
-         p_hig_ub = mean + 5 * hig_pen_var
-         pu = TruncatedNormal(mean, sqrt(hig_pen_var), p_low_lb, p_hig_ub)
-         p_hig = pdf.(pu, x)
-         p_hig_sum = sum(p_hig)
-         if p_hig_sum==0.
-             # println("p_hig_sum = 0 -> p_hig-200.")
-            return p_hig + log(eps_log)
-         elseif  p_hig_sum > 0.
-             # println("else p_tot")
-            p_tot = p_hig
-         end
-         # total_factor = 1/sum(p_tot)
-         # p_tot *= total_factor
-         p_tot ./=sum(p_tot)
-         p_v = lognormpdf(v,0,2.1)
-         p_v = exp(p_v)
-         p_tot *= p_v
-         return map(p->if p>0 log(p) else log(eps_log) end, p_tot)
+  # function unit_test_p_rssi(rssi,signals_Map)
+  #     p_rssi = log.(pdf.(Normal(signals_Map,rssiSigma),rssi))
+  #     return p_rssi
+  # end
+
+    function unit_test_p_transition(state,
+                                    plan_test,
+                                    dt)
+
+        loc = grid2coord(fold_index(state,plan_test),plan_test)
+        dx = x_grid #  * g_size + g_size/2
+        dy = y_grid #  * g_size + g_size/2
+        x = normalpdf(dx,loc[1]+v[1]*dt,dt/sqrt_2)
+        y = normalpdf(dy,loc[2]+v[2]*dt,dt/sqrt_2)
+        brc = broadcast(*,x,y')
+        sum = sum(brc)
+        if sum == 1
+            println("sum == 1")
+        end
+        brc ./= sum(brc)
+
+        return brc
+    end
+    function unit_test_cp(p_rssi,step)
+      prob = p_rssi+step
+      println(prob)
+      return prob[:] # should do normalization?
+    end
+
+    function transLogDist(state::Int, # previous state. defines mean value
+                        v::Array{Float64}, # velocity defines mean value
+                        plan,
+                        dt::Float64)
+  #   g_size = plan.gcell_size # grid resolution
+  #   s_size = plan.sp2d_size
+  #   limits = plan.limits
+  #   # println("fold_index = $(fold_index(state,plan))")
+  #   loc = grid2coord(fold_index(state,plan),plan)
+  #   # create strided distance vector for further calculations
+  #   # create these once outside this function
+  #   dx = x_grid #  * g_size + g_size/2
+  #   dy = y_grid #  * g_size + g_size/2
+  #   # need support for rectangular space
+  #   # x = lognormpdf(dx,loc[1]+v[1]*dt,dt/sqrt_2)
+  #   # y = lognormpdf(dy,loc[2]+v[2]*dt,dt/sqrt_2)
+  #   # x = transProbCoord(dx,loc[1],v[1],dt)
+  #   # y = transProbCoord(dy,loc[2],v[2],dt)
+  #
+  #   # =============Normal PDF ======================================
+  #   x = normalpdf(dx,loc[1]+v[1]*dt,dt/sqrt_2)
+  #   y = normalpdf(dy,loc[2]+v[2]*dt,dt/sqrt_2)
+  #   brc = broadcast(*,x,y')
+  #   brc ./= sum(brc)
+  #   brc .= log.(brc)
+  #   #
+  #   # map1 = broadcast(*,x1,y1')
+  #   # log.(map1)
+  #
+  #
+  #   # x = transProb(dx, loc[1], v[1], dt)
+  #   # y = transProb(dy, loc[2], v[2], dt)
+  #   # println("X = $(x)")
+  #   # println("Y = $(y)")
+  #   # map = broadcast(+,x,y')
+  #   # map = (x*ones(Float64,1,length(y)))+(ones(Float64,length(x),1)*y)
+  #   ax = (dx-loc[1]-v[1]*dt)*2/dt^2
+  #   ay = (dy-loc[2]-v[2]*dt)*2/dt^2
+  #   #---------------------- println("The aceleration by x=$(ax) | y=$(ay)")
+  #   vx = (ones(Float64,s_size[2])*(v[1]+ax*dt)')'
+  #   vy = ones(Float64,s_size[1])*(v[2]+ay*dt)'
+  #   #---------------------- println("The velocity by x=$(vx) | y=$(vy)")
+  #   # check velocity
+  #   # sum(exp.(map))
+  #   # lpdfmax = maximum(map)            #deleted normolize?
+  #   # return map-lpdfmax,[vx[:] vy[:]]
+  #   return brc,[vx[:] vy[:]]
+  # end
+  g_size = plan.gcell_size # grid resolution
+  s_size = plan.sp2d_size
+  limits = plan.limits
+  loc = grid2coord(fold_index(state,plan),plan)
+  dx = x_grid #  * g_size + g_size/2
+  dy = y_grid #  * g_size + g_size/2
+  x = pdf.(Normal.(loc[1]+v[1]*dt,dt/sqrt_2),dx)
+  y = pdf.(Normal.(loc[2]+v[2]*dt,dt/sqrt_2),dy)
+  brc = broadcast(*,x,y')
+  if sum(brc) == 1
+      println("sum == 1")
+  end
+  brc ./= sum(brc)
+  brc .= log.(brc)
+  ax = (dx-loc[1]-v[1]*dt)*2/dt^2
+  ay = (dy-loc[2]-v[2]*dt)*2/dt^2
+  vx = (ones(Float64,s_size[2])*(v[1]+ax*dt)')'
+  vy = ones(Float64,s_size[1])*(v[2]+ay*dt)'
+  return brc,[vx[:] vy[:]]
 end
 
 
-  function transLogDist(state::Int, # previous state. defines mean value
-                        v::Array{Float64}, # velocity defines mean value
-                        plan,
-                        dt::Float64,
-                        dx,
-                        dy,
-                        s_size)
-    # g_size = plan.gcell_size # grid resolution
-    # s_size = plan.sp2d_size
-    # limits = plan.limits
-    # println("fold_index = $(fold_index(state,plan))")
-    loc = grid2coord(fold_index(state,plan),plan)
-    # println("Location ", loc)
-    # create strided distance vector for further calculations
-    # create these once outside this function
+  function transProbCoord(x, s, v, t, penalty = 1, acc_var = .30)
 
-    # dx = x_grid #  * g_size + g_size/2
-    # dy = y_grid #  * g_size + g_size/2
-    # println("xgrid ", dx)
-    # println("ygrid ", dy)
-    # need support for rectangular space
-    # x = lognormpdf(dx,loc[1]+v[1]*dt,dt/sqrt_2)
-    # y = lognormpdf(dy,loc[2]+v[2]*dt,dt/sqrt_2)
-    x = transProbCoord(dx,loc[1],v[1],dt)
-    y = transProbCoord(dy,loc[2],v[2],dt)
-    brc = broadcast(+,x,y')
-    brc.=exp.(brc)
-    #
-    # map = broadcast(+,x,y')
-    # # map = (x*ones(Float64,1,length(y)))+(ones(Float64,length(x),1)*y)
-    # ax = (dx-loc[1]-v[1]*dt)*2/dt^2
-    # ay = (dy-loc[2]-v[2]*dt)*2/dt^2
-    # vx = (ones(Float64,s_size[2])*(v[1]+ax*dt)')'
-    # vy = ones(Float64,s_size[1])*(v[2]+ay*dt)'
-    # # check velocity
-    # lpdfmax = maximum(map)
-    # return map-lpdfmax,[vx[:] vy[:]]
+       # Calculate probability distribution of mobility model with velocity penalty
+       # x : coordinate
+       # v : initial velocity
+       # t : time interval
+       # penalty : number from 0 to inf, hom much penalty is assigned to the
+       #             current value of velocity
+       # acc_var : given that the acceleration has normal distribution, specifies
+       #             acceleration variance
 
-    # x = pdf.(Normal.(loc[1]+v[1]*dt,dt/sqrt_2),dx)
-    # y = pdf.(Normal.(loc[2]+v[2]*dt,dt/sqrt_2),dy)
-    # brc = broadcast(*,x,y')
-    #----------------------------------------------------------------------------------------
-    #there is not sum == 1
-    # if sum(brc) == 1
-    #     println("sum == 1")
-    # end
-    brc ./= sum(brc)
-    # brc .= truncated_log.(brc)
-    brc .= log.(brc)
-    # println(dx)
-    # println(-loc[1])
-    # println(- v[1] * dt)
-    ax = (dx - loc[1] - v[1] * dt) * 2 / dt^2
-    ay = (dy - loc[2] - v[2] * dt) * 2 / dt^2
-    # println("ax ", ax)
-    # println("ay ", ay)
+       v_abs = abs(v)
+       # Parameters are based on the assumption that the pedastrian is most likely to
+       # travel with the same speed as before
+       mean = s + v * t
+       # The value for variance is based on the motion equation
+       hig_pen_var = acc_var * t^2 / (1 + (v>0) * v_abs * penalty) / 2
+       low_pen_var = acc_var * t^2 / (1 + (v<0) * v_abs * penalty) / 2
 
-    # println("vx ", v[1]+ax*dt)
-    # println("vy ", v[2]+ay*dt)
-    vx = broadcast(+,zeros(1,s_size[2]), v[1]+ax*dt)
-    vy = broadcast(+,zeros(s_size[1],1), v[2]+ay'*dt)
-    # vx = (ones(Float64,s_size[2])*(v[1]+ax*dt)')'
-    # vy = ones(Float64,s_size[1])*(v[2]+ay*dt)'
-    return brc,[vx[:] vy[:]]
-  end
+       p_low_lb = mean - 5 * low_pen_var
+       p_hig_ub = mean + 5 * hig_pen_var
 
+       pu = TruncatedNormal(mean, hig_pen_var, p_low_lb, p_hig_ub)
+       # pl = TruncatedNormal(mean, low_pen_var, p_low_lb, mean)
 
+       # p_low = pdf.(pl, x);
+       p_hig = pdf.(pu, x)
+      #  println(sum(p_low)," ",sum(p_hig))
+
+       # p_low_sum = sum(p_low)
+       p_hig_sum = sum(p_hig)
+
+       # if p_low_sum+p_hig_sum==0.  #x[end] < p_low_lb || x[1] > p_hig_ub
+       if p_hig_sum==0.
+          # if all probabilities are zero
+          # println("\n All probabilities are zero")
+          return p_hig-200.
+       elseif  p_hig_sum > 0.
+          # mean value is less than provided x
+          p_tot = p_hig
+
+       # elseif p_hig_sum == 0. && p_low_sum > 0.
+       #    # mean value is greater than provided x
+       #    p_tot = p_low
+       # else
+       #    nze = find(p_hig)[1] # find first non-zero
+       #    factor = p_low[nze]/p_hig[nze]
+       #    p_low[nze] = 0
+       #    p_hig *= factor
+       #    p_tot = (p_low+p_hig)
+       end
+       total_factor = 1/sum(p_tot)
+       p_tot *= total_factor
+       return map(p->if p>0 log10(p) else -200. end, p_tot)
+    end
 
 
   # ==== Needs improvement ====
-  # function path_to_rssi(path,signal_map,plan, dt = 1.)
-  #   #   this function needs to be adapted for the use with mapPlan
-  #   g_size = plan.gcell_size
-  #   signalInfo = Array(RssiRecord,size(path,1))
-  #   rssi = zeros(Float64,size(path,1),1)
-  #   index_path = zeros(Float64,size(path,1),2)
-  #   ipu = zeros(Float64,size(path,1),1)
-  #   v1 = zeros(Float64,6,2)
-  #   a1 = zeros(Float64,6,2)
-  #   for i in 1:1:size(path,1)
-  #     index = coord2grid(path[i,:],g_size)
-  #     rssi[i] = randn()*rssiSigma+signal_map[index[1],index[2]]
-  #     index_path[i,:] = index
-  #     ipu[i] = unfold_index(index,plan)
-  #
-  #     signalInfo[i] = RssiRecord(rssi[i],1,1.)
-  #
-  #     if i<size(path,1)
-  #       a1[i,:] = (path[i+1,:]-path[i,:]-v1[i,:]*dt)*2/dt^2
-  #       v1[i+1,:] = v1[i,:] + a1[i,:]*dt
-  #     end
-  #
-  #   end
-  #   return signalInfo,index_path,ipu, v1
-  # end
+  function path_to_rssi(path,signal_map,plan, dt = 1.)
+    #   this function needs to be adapted for the use with mapPlan
+    g_size = plan.gcell_size
+    signalInfo = Array(RssiRecord,size(path,1))
+    rssi = zeros(Float64,size(path,1),1)
+    index_path = zeros(Float64,size(path,1),2)
+    ipu = zeros(Float64,size(path,1),1)
+    v1 = zeros(Float64,6,2)
+    a1 = zeros(Float64,6,2)
+    for i in 1:1:size(path,1)
+      index = coord2grid(path[i,:],plan)
+      rssi[i] = randn()*rssiSigma+signal_map[1][index[1],index[2]]
+      index_path[i,:] = index
+      ipu[i] = unfold_index(index,plan)
+
+      signalInfo[i] = RssiRecord(rssi[i],1,1.)
+
+      if i<size(path,1)
+        a1[i,:] = (path[i+1,:]-path[i,:]-v1[i,:]*dt)*2/dt^2
+        v1[i+1,:] = v1[i,:] + a1[i,:]*dt
+      end
+
+    end
+    return signalInfo,index_path,ipu, v1
+  end
 
 
   # function combine_prob(p_rssi,step,boosting = 1e100)
@@ -488,22 +560,26 @@ end
   # end
 
   function combine_logprob(p_rssi::Array{Float64},step::Array{Float64})
+    # println("Before combine_prob: p_rssi=$(p_rssi) | step=$(step)")
     # prob = p_rssi+step
     prob = p_rssi+step
     prob.= exp.(prob)
     prob./=sum(prob)
-    # prob.=truncated_log.(prob)
-    prob.= log.(prob)
-    return prob[:]
+    prob.=log.(prob)
+    # println("After combine_prob: prob=$(prob)")
+    return prob[:] # should do normalization?
   end
 
   function combine_trellis(trellis_part,velocity_part,p_transition,v_transition,path_back,state)
     # vectorization possible?
+    # ----------------------println("before combine_trellis: trellis_part=$(trellis_part) | velocity_part=$(velocity_part) | p_transition=$(p_transition) | v_transition=$(v_transition) | path_back=$(path_back) | state=$(state)")
     for ss in 1:1:length(trellis_part)
-      if p_transition[ss] > trellis_part[ss]
+      if p_transition[ss] > trellis_part[ss]# maybe >=
         trellis_part[ss] = p_transition[ss]
         velocity_part[ss,:] = v_transition[ss,:]
         path_back[ss] = state
+      elseif p_transition[ss] == trellis_part[ss]
+        println("p_transition = $(p_transition[ss]) and Trellis = $(trellis_part[ss])")
       end
     end
     return trellis_part,velocity_part,path_back
@@ -544,18 +620,54 @@ end
       return newplan,newssms
   end
 
-
+  # function combine_logtrellis(temp_trellis::Array{Float64},temp_velocity::Array{Float64})
+  #   g_size = size(temp_trellis,1)
+  #   trellis = zeros(Float64,g_size)
+  #   velocity = zeros(Float64,g_size,2)
+  #   path_back = zeros(Int32,g_size)
+  #   (~,maxind) = findmax(temp_trellis,1)
+  #
+  #   trellis = temp_trellis[maxind]
+  #   velocity = temp_velocity[maxind]
+  #   temp = ceil(maind/g_size)
+  #   path_back = maxind - (temp-1)*g_size
+  #
+  #   return trellis,velocity,path_back
+  # end
 
   function beam_search(data, K) # data = trellis[:,1]
     trellis = sort(data, rev=true)
     state = findin(data,trellis[1:K])
     return state
-    end
+    # sequences = [[list(), 1.0]]
+    # 	# walk over each step in sequence
+    # 	for row in data:
+    # 		all_candidates = list()
+    # 		# expand each current candidate
+    # 		for i in range(len(sequences)):
+    # 			seq, score = sequences[i]
+    # 			for j in range(len(row)):
+    # 				candidate = [seq + [j], score * -log(row[j])]
+    # 				all_candidates.append(candidate)
+    # 		# order all candidates by score
+    # 		ordered = sorted(all_candidates, key=lambda tup:tup[1])
+    # 		# select k best
+    # 		sequences = ordered[:k]
+    # 	return sequences
+  end
 
+  # function greedy_decoder(data) # input : trellis[:,1] it's vector
+	# # index for largest probability each row
+  # # version for julia
+  #  # mxval, mxindx = findmax(data, ndims(data))
+  #  # ind2sub(size(a), vec(mxindx))[2]
+  #  return indmax(data)
+	#  # return [argmax(s) for s in data] #python version
+  # end
 
   function estimate_path_viterbi(signals,
-                                  signal_map,
-                                  plan;
+                                  o_signal_map,
+                                  o_plan;
                                   seed = [-1. -1.],
                                   testing = false,
                                   ip = [],
@@ -582,18 +694,16 @@ end
     # In order to cope with this problem probability scaling is used
 
 
-    # plan,signal_map = scaleSpace(o_plan,o_signal_map,5)
-    # spaceInit(plan)
-    println("it's true viterbi")
-    x_grid = collect( plan.limits[1,1]:plan.gcell_size:(plan.limits[1,2]-1) ) + plan.gcell_size/2
-    y_grid = collect( plan.limits[2,1]:plan.gcell_size:(plan.limits[2,2]-1) ) + plan.gcell_size/2
+    # plan,signal_map = scaleSpace(o_plan,o_signal_map,1)
+    plan,signal_map = o_plan,o_signal_map
+    spaceInit(plan)
 
 
     g_size = prod(plan.sp2d_size) # total number of cells in the grid
-    trellis = zeros(Float64,g_size,2)+log_eps_log # stores previous and current state probability
+    trellis = zeros(Float64,g_size,2)-1e10 # stores previous and current state probability
     velocity = zeros(Float64,g_size,2,2) # stores previous and current state velocity in xy dimensions
     path_back = zeros(Int32,g_size,length(signals)) # stores feasible paths
-    s_size = plan.sp2d_size
+
 
 
 
@@ -609,15 +719,11 @@ end
 
     # calculate log distribution. log allows to use sum instead of product
     # This is used to initialize probabilities in trellis
-    # c_rssi = signals[1].rssi
-    # c_ap_id = signals[1].ap
+    c_rssi = signals[1].rssi
+    c_ap_id = signals[1].ap
     # println("before rssiLogDist")
-
-    # init step not normalized
-    # p_rssi = rssiLogDist(c_rssi,
-    #                       signal_map[c_ap_id]) # the value is boosted by exp(100)
-    p_rssi = rssiLogDist(signals[1].rssi,
-                          signal_map[signals[1].ap]) # the value is boosted by exp(100)
+    p_rssi = rssiLogDist(c_rssi,
+                          signal_map[c_ap_id]) # the value is boosted by exp(100)
 
     # Combines initial probabilities
     # println("combine_logprob")
@@ -631,7 +737,7 @@ end
       # println("viterby Start processing rssi signals $(i)")
       # whenever there is no time difference between consecutive measurements,
       # assume that we did not change location
-      dt = signals[i+1].t - signals[i].t
+      dt = signals[i+1].t - signals[1].t
       if dt==0.
         for ii=1:length(path_back[:,i+1])
           path_back[ii,i+1] = ii
@@ -645,22 +751,11 @@ end
       c_ap_id = signals[i+1].ap
       p_rssi = rssiLogDist(c_rssi,
                             signal_map[c_ap_id])
-      # p_rssi = rssiLogDist(signals[i+1].rssi,
-      #                       signal_map[signals[i+1].ap])
-
-    #   if testing
-    #     print("Maximum signal proability on the next step is at ",
-    #           fold_index(indmax(p_rssi),plan),
-    #           " and ",
-    #           fold_index(ipu[i+1],plan),
-    #           " is expected\n")
-    #   end
-
-      # println("before for state in 1:1:g_size")
       # for state in 1:1:g_size
+      for state in beam_search(trellis[:,1],length(trellis[1,:]))
+      # println("before for state in 1:1:g_size")
         # iterate over states in trellis for exhaustive optimum search
-        states = beam_search(trellis[:,1], trunc(Int,length(trellis[:,1])/10))
-        for state in states
+        # println("State = $(state)")
         # continue onlu if the log probability of the previous state is
         # more than -100. Remember scailing to 1e100 exists
         # if (trellis[state,1]>-100)
@@ -669,10 +764,7 @@ end
           p_transition,v_transition = transLogDist(state,
                                                   velocity[state,:,1],
                                                   plan,
-                                                  dt,
-                                                  x_grid,
-                                                  y_grid,
-                                                  s_size)
+                                                  dt)
 
         #   if testing
         #     if state == ipu[i]
@@ -683,12 +775,7 @@ end
         #             " is expected\n")
         #     end
         #   end
-          # println("before combine_logprob")
-
           cp = combine_logprob(p_rssi,p_transition)
-          # println("before combine_trellis")
-
-          # slicing creates new arrays -> performance issue
           trellis[:,2],velocity[:,:,2],path_back[:,i+1] = combine_trellis(trellis[:,2],
                                                                           velocity[:,:,2],
                                                                           cp+trellis[state,1],
@@ -696,48 +783,34 @@ end
                                                                           path_back[:,i+1],
                                                                           state)
         # end
-
       end
-    #   print("\n")
-      # trellis[:,i+1],velocity[:,:,i+1],path_back[:,i+1] = combine_logtrellis(temp_trellis,temp_velocity)
-      # boosting = 1e100
-      # boosting_coefficient = boosting/sum(trellis[:,i+1])
-      # trellis[:,i+1] = trellis[:,i+1]*boosting_coefficient
-
-      # find the maximum probability value
-      # lpdfmax = maximum(trellis[:,2])
-      # # scale log probabilities? slicing creates new arrays -> performance issue
-      # trellis[:,2] = trellis[:,2]-lpdfmax
-      # # current state probabilities and velocities assigned to the previous
-      # # step for the next iteration
-      # trellis[:,1] = trellis[:,2]
-      # velocity[:,:,1] = velocity[:,:,2]
-      # trellis[:,2] = -1e100 # zeros(Float64,g_size)-1e10 # creating new array -> performance issues
-      # velocity[:,:,2] = 0. # zeros(Float64,g_size,2) # creating new array -> performance issues
-      # toc()
       trellis[:,1] = trellis[:,2]
       velocity[:,:,1] = velocity[:,:,2]
       trellis[:,2] = -1e10 #zeros(Float64,g_size)-1e10 # creating new array -> performance issues
-      velocity[:,:,2] = 0.
+      velocity[:,:,2] = 0. #zeros(Float64,g_size,2) # creating new array -> performance issues
     end
     # println("Allocate memory for estimated path")
     # Allocate memory for estimated path
     estimated_path = zeros(Float64,length(signals),3)
     # Find most likely path
     step_back = indmax(trellis[:,1])
+    # println("step_back= $(step_back)")
+    # println("another way step_back= $(findmax(trellis[:,1]))")
+    # A_max = maximum(trellis[:,1])
+    # println("ind of all maxima= $(find(a->a==A_max, trellis[:,1]))")
     # print("Choosen end max is at $(step_back)\n")
     # estimated_path[end,:] = grid2coord(fold_index(location,spaceInfo),spaceInfo.grid_size)
     # step_back = path_back[location,end]
-
+    steps = []
     # Propagate back to find the most likely path
-
     for step_ind in length(signals):-1:1
-      estimated_path[step_ind,1:2] = grid2coord(fold_index(step_back,plan),plan)
+        push!(steps,step_back)
+      estimated_path[step_ind,1:2] = grid2coord(
+                                      fold_index(step_back,plan),
+                                                  plan)
       estimated_path[step_ind,3] = signals[step_ind].t
       step_back = path_back[step_back,step_ind]
     end
-
-    # return trellis,velocity
-    return estimated_path#, path_back, steps
+    return estimated_path, steps
   end
 end
