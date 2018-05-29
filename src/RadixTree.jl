@@ -318,7 +318,7 @@ function generate_hierarchy(tree,IDs,morton_codes,objects)
 end
 
 function create_index(objects,lims)
-    println("Creating 2D index")
+  print("Creating 2D index...")
   dataSize = length(objects)
   tree = radixTree(dataSize,
                     dataSize-1,
@@ -338,6 +338,8 @@ function create_index(objects,lims)
 
   generate_hierarchy(tree,IDs,morton_codes,objects)
 
+  println("done")
+  
   return tree
 end
 

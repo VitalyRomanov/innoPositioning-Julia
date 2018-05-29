@@ -60,17 +60,24 @@ end
 # MapVis.visualizeWallVis(proj)
 
 params = [147.55,-20*log10(2.4e9),0.,-0.,-3.,-9.51,-41.14]
-# params = []
+# 147.55, -187.604, 0.0, -11.8535, -2.0, -5.0, -15.0 with bounds
+# 147.55, -187.604, 0.0, -16.8323, -1.75058, -5.00855, -1.08531 no bounds
+params = [147.55, -187.604, 0.0, -11.8535, -2.0, -5.0, -15.0]
 if params == []
     params = CoverageMapProject.fit_parameters(proj)
 end
-CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = true)
+CoverageMapProject.calculate_coverage_map(proj,parameters = params,from_dump = false)
 
-# ssms = CoverageMapProject.load_ssms(proj)
-#
-# clients = CoverageMapProject.load_clients(proj)
-#
-# CoverageMapProject.restore_paths(clients,ssms,proj)
+ssms = CoverageMapProject.load_ssms(proj)
+
+clients = CoverageMapProject.load_clients(proj)
+
+
+#warmup
+# warmup = CoverageMapProject.load_warmup()
+# CoverageMapProject.restore_paths(warmup,ssms,proj)
+
+CoverageMapProject.restore_paths(clients,ssms,proj)
 
 # space = project.plan.limits[1:2,:]
 # grid_size = 1.

@@ -10,6 +10,7 @@ using DataFrames
 using Optim
 using MapVis
 using LocTrack
+using CSV
 
 
 type Measurement
@@ -52,8 +53,8 @@ function read_ap_measur(path, ap_id)
     for file in readdir("$(path)/loc/$(ap_id)")
       if file[end-3:end] == ".txt" && !isnull(tryparse(Int,file[1:end-4]))
         loc_id = parse(Int,file[1:end-4])
-        location = mean(Array(readtable("$(path)/loc/$(ap_id)/$(file)",header = false)),1)
-        rssi = Array(readtable("$(path)/rssi/$(ap_id)/$(file)",header = false)[:,2])
+        location = mean(Array(CSV.read("$(path)/loc/$(ap_id)/$(file)",header = false, nullable = false)),1)
+        rssi = Array(CSV.read("$(path)/rssi/$(ap_id)/$(file)",header = false, nullable = false)[:,2])
         push!(measur,Measurement(loc_id,location[:],rssi))
       end
     end
@@ -199,7 +200,7 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
     AP = project.APs[ap_ind]
 
     ssm_path = "$(project.path_init_data)/ssm_$(ap_ind).jld"
-    ssm_map_path = "$(project.path_init_data)/map_$(ap_ind)"
+    ssm_map_path = "$(project.path_init_data)/map_$(ap_ind).png"
     dump_path = "$(project.path_init_data)/ssm_dump_$(ap_ind).txt"
 
     ssm = nothing
@@ -208,7 +209,9 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
         if !isfile(dump_path)
             println("No dump found!")
         else
+            print("Loading ssm_$(ap_ind) dump...")
             ssm = load_from_dump(project.plan,dump_path,parameters)
+            println("done")
         end
     end
 
@@ -236,7 +239,7 @@ function calculate_coverage_map(project::CMProject;parameters = [147.55,-20*log1
       if ssm==nothing
         ssm = JLD.load(ssm_path,"ssm")
       end
-      println("Plotting coverage map for AP $(ap_ind)")
+      println("Plotting coverage map for AP $(ap_ind) ")
       MapVis.plot_map(ssm',project,ap_ind,ssm_map_path)
     end
 
@@ -252,7 +255,7 @@ function load_from_dump(plan,dump_path,params)
     size1 = limits[1,2]-limits[1,1]; size2 = limits[2,2]-limits[2,1];
     ssm = zeros(Float64,size1,size2)-3080.
 
-    dump_ssm = readtable(dump_path, header=false)
+    dump_ssm = CSV.read(dump_path, header=false)
 
     loc = (0.,0.); locs = []; l_paths = [];
 
@@ -319,7 +322,7 @@ function fit_parameters(project;n_rand_inits = 1000)#ap_id
       im_tree = ImageTree.buildImageTree(project.plan,
                                             AP,
                                             ap_vis)
-    # iterate through measutement positions
+    # iterate through measurement positions
       for (meas_ind,m) in enumerate(measur)
           x = MapBuilder.signal_paths_info(m.location[:],
                                       im_tree,
@@ -344,16 +347,18 @@ function fit_parameters(project;n_rand_inits = 1000)#ap_id
   # see fmin() for details
   # we change only the last three parameters as they describe the environment
   lim_bounds = [
-        -4 -2;
-        -30 -5;
-        -50 -15
+        -50. 20.;
+        -4. -2.;
+        -30. -5.;
+        -50. -15.
   ]
-  theta = [147.55,-20*log10(2.4e9),20.,-0.,-2.5,-12.53,-12.]
+  theta = [147.55,-20*log10(2.4e9),0.,-0.,-2.5,-12.53,-12.]
   best_cost = 1e10; best_par = []
   for i=1:n_rand_inits
-      sample_par = rand(3).*(lim_bounds[:,2]-lim_bounds[:,1]) + lim_bounds[:,1]
-      th_temp = theta;   th_temp[5:7] = sample_par
-      th_temp,min_val = fmin(theta,X,Y)
+      sample_par = rand(size(lim_bounds,1)).*(lim_bounds[:,2]-lim_bounds[:,1]) + lim_bounds[:,1]
+      th_start_pos = length(theta) - size(lim_bounds,1) + 1
+      th_temp = theta;   th_temp[th_start_pos:7] = sample_par
+      th_temp, min_val = fmin(theta, X, Y, lim_bounds)
       if min_val < best_cost
           best_cost = min_val
           best_par = th_temp
@@ -377,12 +382,34 @@ end
 
 
 
-function fmin(theta,X,Y)
+function fmin(theta, X, Y, lims)
   # pos-1 parameters are left from the optimization procedure
   const pos = 4
-  cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2),1:length(X)))
+
+  cost(th) = mean(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2),1:length(X)))
+
+  # signal_power(th, m_ind) = begin
+  #     println(size(X[m_ind]), " ", size([theta[1:pos-1];th]))
+  #     sum(10.^(X[m_ind]*[theta[1:pos-1];th]/10))
+  # end
+  # square_error(th, m_ind) = begin
+  #     println(size(signal_power(th, m_ind)), " ", size(Y[m_ind]))
+  #     (signal_power(th, m_ind) - Y[m_ind]).^2
+  # end
+  # least_squares(th) = begin
+  #     mean(
+  #       map(i->square_error(th,i), 1:length(X))
+  #     )
+  # end
+
+  # println("Cost: $(cost(theta[pos:7])), LS: $(least_squares(theta[pos:7]))")
+
   # cost(th) = sum(map(i->sum((10*log10(sum(10.^(X[i]*[theta[1:pos-1];th]/10))) - Y[i]).^2)/length(Y[i]),1:length(X)))
-  res = optimize(cost,theta[pos:7],LBFGS())
+  lower = lims[:,1]; upper = lims[:,2]
+  initial = theta[pos:7]
+  res = optimize(cost, initial, LBFGS())
+  # res = optimize(cost, initial, lower, upper, Fminbox{LBFGS}())
+  # res = optimize(cost, initial, ParticleSwarm(; lower=lower, upper=upper, n_particles = 50))
   return [theta[1:pos-1];Optim.minimizer(res)],Optim.minimum(res)
 end
 
@@ -399,8 +426,24 @@ function load_clients(project)
     records = []
     for file in readdir("$(project.path_init_data)/clients")
         if file[end-2:end] != "csv" continue end
+        # filter remove later
+        if parse(Int,split(split(file,"_")[end], ".")[1]) > 7057 continue end
         client_path = "$(project.path_init_data)/clients/$(file)"
         push!(records,(file[1:end-4],load_client(client_path)))
+    end
+    return records
+end
+
+function load_warmup()
+    records = []
+    wd = "$(pwd())/res/warmup"
+    paths = ["client_2163.csv",
+             "client_6571.csv",
+             "client_8266.csv",
+             "client_9300.csv",
+             "client_9918.csv"]
+    for file in paths
+        push!(records,(file[1:end-4],load_client("$(wd)/$(file)")))
     end
     return records
 end
@@ -409,20 +452,30 @@ function load_client(path)
     Record = LocTrack.RssiRecord
     rssi = :rssilog_rssi
     ap_id = :rssilog_antenna
-    time = :rssilog_timestamp
-    readings = Array{Record}(0)
+    time = :rssilog_timestamp2
+    readings = Array{Array{Record}}(0)
 
-    client = readtable(path)
+    client = CSV.read(path, nullable=false)
     n_rec = size(client,1)
     if n_rec>0
-        push!(readings,Record(client[1,rssi],client[1,ap_id],client[1,time]))
+        push!(readings,[Record(client[1,rssi],client[1,ap_id],client[1,time])])
     end
     last_t = client[1,time]
     if n_rec>1
         for i=2:n_rec
-            if client[i,time]-last_t > 0 && client[i,rssi] < -10
-                push!(readings,
-                    Record(client[i,rssi],client[i,ap_id],client[i,time]))
+            if client[i,rssi] < -10
+                if client[i,time]-last_t < 1.1
+                    if readings[end][1].ap == client[i,ap_id]
+                        readings[end][1].rssi += client[i,rssi]
+                        readings[end][1].rssi /= 2
+                    else
+                        push!(readings[end],
+                            Record(client[i,rssi],client[i,ap_id],client[i,time]))
+                    end
+                else
+                    push!(readings,
+                        [Record(client[i,rssi],client[i,ap_id],client[i,time])])
+                end
                 last_t = client[i,time]
             end
         end
@@ -435,17 +488,23 @@ function restore_paths(clients,ssms,project)
     paths_path = "$(project.path_init_data)/paths"
     mkpath(paths_path)
     # clients = clientz[7:8]
-    for (client_fn,records) in clients
-        print("\rProcessign $(client_fn)")
-        path = LocTrack.estimate_path_viterbi(
-                    records,
-                    ssms,
-                    project.plan
-        )
-        writetable("$(paths_path)/$(client_fn).csv",
-                    convert(DataFrame,path),
-                    header=false)
-        MapVis.plot_paths(project,[path[:,1:2]],client_fn)
+    @sync @parallel for (client_fn,records) in clients
+        try
+            if !isfile("$(paths_path)/$(client_fn).csv")
+                # print("\rProcessign $(client_fn)")
+                path = LocTrack.estimate_path_viterbi(
+                            records,
+                            ssms,
+                            project.plan
+                )
+                CSV.write("$(paths_path)/$(client_fn).csv",
+                            convert(DataFrame,path),
+                            header=false)
+                MapVis.plot_paths(project,[path[:,1:2]],client_fn)
+            end
+        catch
+            println("Something wrong with $(client_fn)")
+        end
     end
     println("")
 

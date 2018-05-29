@@ -57,12 +57,12 @@ module ClientDataProc
     client_record_size = size(client_data,1)
     ip_map = get_ip_labels()
     while i<=client_record_size
-      ap_label = get(ip_map, client_data[i,3], -1)
+      ap_label = get(ip_map, client_data[i,:rssilog_antenna], -1)
       if ap_label == -1
         client_data = append!(client_data[1:i-1,:],client_data[i+1:end,:])
         i-=1
       else
-        client_data[i,3] = "$(ap_label)"
+        client_data[i,:rssilog_antenna] = "$(ap_label)"
       end
       i+=1
       client_record_size = size(client_data,1)
@@ -118,10 +118,29 @@ module ClientDataProc
   end
 
   function remove_milliseconds(client_data)
-    for i in 1:size(client_data,1)
-      timestamp = split(client_data[i,4],".")
-      client_data[i,4] = "$(Dates.DateTime(timestamp[1],"yyyy-mm-dd HH:MM:SS"))"
+    ts = client_data[:,:rssilog_timestamp2]
+
+    get_date(time) = split(time,".")[1]
+    date2unix(datetime) = Dates.datetime2unix(Dates.DateTime(datetime,"yyyy-mm-dd HH:MM:SS"))
+    convert(x) = begin
+        try
+            date2unix(get_date(x))
+        catch
+            println(x)
+        end
     end
+
+    ts = map(convert, ts)
+    # ts = map(x->Dates.datetime2unix(Dates.DateTime(split(x,".")[1],"yyyy-mm-dd HH:MM:SS")), ts)
+
+    client_data[:,:rssilog_timestamp2] = ts
+
+    # client_data[i,:rssilog_timestamp2] = ts
+    #
+    # for i in 1:size(client_data,1)
+    #   timestamp = split(client_data[i,:rssilog_timestamp2],".")
+    #   client_data[i,:rssilog_timestamp2] = Dates.datetime2unix(Dates.DateTime(timestamp[1],"yyyy-mm-dd HH:MM:SS"))
+    # end
     return client_data
   end
 
@@ -139,4 +158,67 @@ module ClientDataProc
     client_data[size(client_data,1),4] = "0"
     return client_data
   end
+
+
+  function get_client_pos(data)
+      ids = :session_sso
+      clients = Dict()
+
+      n_records = size(data,1)
+      for i = 1:n_records
+          if i%1000 == 0
+              print("\r$(i)/$(n_records) collecting positions")
+          end
+          client_id = data[i,ids]
+          if client_id in keys(clients)
+              push!(clients[client_id], i)
+          else
+              clients[client_id] = [i]
+          end
+      end
+
+      return clients
+  end
+
+
+  function sift_clients(data)
+      clients = get_client_pos(data)
+
+      client_tables = Dict()
+      println("")
+      for (cl_i,cl) in enumerate(keys(clients))
+          if cl_i % 100 == 0
+              print("\r$(cl_i)/$(length(clients)) clients sifted")
+          end
+          client_tables[cl] = data[clients[cl], [:rssilog_rssi, :rssilog_antenna, :rssilog_timestamp2]]
+      end
+      println("")
+      return client_tables
+  end
+
+  function read_client_data()
+      c_path = "/Users/LTV/Documents/export_rssi_fixed.csv"
+
+      println("Reading data")
+      client = readtable(c_path)
+      println("Process time")
+      remove_milliseconds(client)
+      println("Process IPs")
+      ip_to_labels!(client)
+
+      return client[:,[:rssilog_rssi, :rssilog_antenna, :rssilog_timestamp2, :session_sso]]
+  end
+
+  function save_clients(clients)
+      path_to_write = "/Users/LTV/Work Drive/WiFi Positioning/rssi_data/town/data/clients_large_log/"
+
+      for cl in keys(clients)
+          path_to_write = "/Users/LTV/Work Drive/WiFi Positioning/rssi_data/town/data/clients_large_log/client_$(cl).csv"
+
+          sort!(clients[cl], cols=[:rssilog_timestamp2])
+
+          writetable(path_to_write, clients[cl])
+      end
+  end
+
 end

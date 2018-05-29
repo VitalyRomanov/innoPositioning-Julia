@@ -83,7 +83,7 @@ function plot_paths(project,paths,mp_ind)
     mkdir("$(project.path_init_data)/paths")
   end
 
-  savefig("$(project.path_init_data)/paths/$(mp_ind).svg")
+  savefig("$(project.path_init_data)/paths/$(mp_ind).png")
 end
 
 
